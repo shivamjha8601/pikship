@@ -1,0 +1,9 @@
+flowchart TD
+    A[RTO event from carrier] --> B[Compute reverse-leg charge]
+    B --> C{available_balance gte charge?}
+    C -->|yes| D[Post rto_charge debit]
+    C -->|no| E{balance minus charge gte minus grace_cap?}
+    E -->|yes| F[Post debit; wallet within grace; notify seller]
+    E -->|no| G{Seller on credit line?}
+    G -->|yes| H[Post against credit line]
+    G -->|no| I[Hold debit; queue retry; suspend new bookings; critical alert]

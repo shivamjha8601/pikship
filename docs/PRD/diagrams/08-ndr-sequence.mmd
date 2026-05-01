@@ -1,0 +1,20 @@
+sequenceDiagram
+    participant CRR as Carrier
+    participant TR as Tracking
+    participant NDRC as NDR ctx
+    participant N as Notify
+    participant Buyer
+    participant FB as Feedback page
+    participant ADP as Carrier adapter
+
+    CRR->>TR: NDR event
+    TR->>NDRC: create NDREvent (deadline +24h)
+    NDRC->>N: enqueue buyer outreach
+    N->>Buyer: WhatsApp + SMS with reschedule link
+    Buyer->>FB: opens link, picks slot
+    FB->>NDRC: action=reattempt_with_slot
+    NDRC->>ADP: requestAction(awb, reattempt, slot)
+    ADP-->>NDRC: ok
+    NDRC->>N: notify seller
+    CRR->>TR: OFD next day
+    CRR->>TR: Delivered

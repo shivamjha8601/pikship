@@ -1,0 +1,8 @@
+flowchart TD
+    R[Resolve setting K for seller S] --> L1{Pikshipp lock on K?}
+    L1 -->|yes| RV1[Return Pikshipp lock value]
+    L1 -->|no| L2{Seller-level override exists?}
+    L2 -->|yes| RV2[Return seller's override]
+    L2 -->|no| L3{Seller-type default exists?}
+    L3 -->|yes| RV3[Return seller-type default]
+    L3 -->|no| RV4[Return Pikshipp global default]

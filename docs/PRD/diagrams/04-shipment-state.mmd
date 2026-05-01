@@ -1,0 +1,24 @@
+stateDiagram-v2
+    [*] --> Created
+    Created --> Booked: AWB issued
+    Booked --> Pickup_Pending: manifested
+    Pickup_Pending --> Picked_Up
+    Picked_Up --> In_Transit
+    In_Transit --> Out_For_Delivery
+    Out_For_Delivery --> Delivered
+    Out_For_Delivery --> NDR
+    NDR --> Out_For_Delivery: reattempt
+    NDR --> RTO_Initiated: max attempts or seller action
+    RTO_Initiated --> RTO_In_Transit
+    RTO_In_Transit --> RTO_Delivered
+    Delivered --> [*]
+    RTO_Delivered --> [*]
+    In_Transit --> Lost
+    Out_For_Delivery --> Lost
+    In_Transit --> Damaged
+    Out_For_Delivery --> Damaged
+    Booked --> Cancelled: pre-pickup
+    Pickup_Pending --> Cancelled: pre-pickup
+    Cancelled --> [*]
+    Lost --> [*]
+    Damaged --> [*]

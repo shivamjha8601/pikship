@@ -1,0 +1,14 @@
+flowchart TD
+    PIK[Pikshipp - operator and brand]:::root
+    PIK --> S1[Seller A]
+    PIK --> S2[Seller B]
+    PIK --> S3[Seller C ...]
+
+    S1 --> SU1[Sub-seller A.1 - branch]
+    S1 --> SU2[Sub-seller A.2 - subsidiary]
+    S2 --> B2[Buyers]
+    S3 --> B3[Buyers]
+    SU1 --> B1a[Buyers]
+    SU2 --> B1b[Buyers]
+
+    classDef root fill:#1a73e8,color:#fff,stroke:#1a73e8

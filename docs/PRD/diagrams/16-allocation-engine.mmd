@@ -1,0 +1,10 @@
+flowchart TB
+    IN[Order + seller context] --> FILT[Filter: hard constraints]
+    FILT --> CAND[Surviving candidates]
+    CAND --> RATE[Pricing engine: rates per candidate]
+    CAND --> REL[Reliability scores per carrier x zone]
+    RATE --> SCO[Compute weighted scores]
+    REL --> SCO
+    SCO --> RANK[Rank candidates]
+    RANK --> EXP[Audit: filtered_out + scores + weights]
+    RANK --> OUT[Recommended pick + ranked alternatives]

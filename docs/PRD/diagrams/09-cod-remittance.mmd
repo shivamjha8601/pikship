@@ -1,0 +1,16 @@
+sequenceDiagram
+    participant Buyer
+    participant Carrier
+    participant Pikshipp
+    participant LED as Ledger
+    participant SW as SellerWallet
+    participant FIN as Finance
+
+    Buyer->>Carrier: pays cash on delivery
+    Carrier->>Pikshipp: tracking event delivered
+    Pikshipp->>LED: schedule remittance
+    Pikshipp->>SW: D plus 2 credit cod_remit_to_seller
+    Carrier->>Pikshipp: D plus 4 to 7 remittance file
+    Pikshipp->>FIN: match by AWB
+    FIN->>LED: post carrier credit
+    FIN->>Pikshipp: alert on mismatches

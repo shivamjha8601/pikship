@@ -1,0 +1,19 @@
+flowchart LR
+    OMS[Shipment booking] --> ROUTE[Carrier router]
+    ROUTE --> ADP1[Delhivery adapter]
+    ROUTE --> ADP2[Bluedart adapter]
+    ROUTE --> ADP3[Ekart adapter]
+    ROUTE --> ADPN[... N more adapters]
+    ROUTE --> ADPF[Pikshipp Express adapter]
+
+    ADP1 --> CRR[Courier APIs]
+    ADP2 --> CRR
+    ADP3 --> CRR
+    ADPN --> CRR
+    ADPF --> CRR
+
+    CRR -- webhooks --> WHK[Webhook receiver]
+    CRR -- polled --> POLLER[Polling worker]
+    WHK --> NORM[Status normalizer]
+    POLLER --> NORM
+    NORM --> TRACK[Tracking ctx]

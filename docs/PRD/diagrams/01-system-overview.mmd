@@ -1,0 +1,83 @@
+flowchart TB
+    subgraph SRC["Order sources (channels)"]
+        SH[Shopify]
+        WC[WooCommerce]
+        AM[Amazon SP-API]
+        FK[Flipkart]
+        ME[Meesho]
+        CSV[CSV / Excel]
+        MAN[Manual entry]
+    end
+
+    subgraph CORE["Pikshipp platform"]
+        direction TB
+        IAM[Identity and onboarding]
+        SEL[Seller org and config]
+        POL[Policy engine]
+        OMS[Order management]
+        CAT[Catalog and warehouses]
+        ALC[Allocation engine]
+        PRC[Pricing engine]
+        BOOK[Shipment booking]
+        TRACK[Tracking and status normalization]
+        NDR[NDR action engine]
+        RTO[Returns and RTO]
+        COD[COD management]
+        WAL[Wallet and ledger]
+        REC[Weight reconciliation]
+        REPO[Reports and analytics]
+        NOT[Notifications]
+        BUYUI[Buyer experience surfaces]
+        SUP[Support and ticketing]
+        ADM[Admin and ops console]
+        RSK[Risk and fraud]
+        CON[Contracts and documents]
+        AUD[Audit and change-log]
+        INS[Insurance optional]
+    end
+
+    subgraph CN["Courier network"]
+        DLV[Delhivery]
+        BLD[Bluedart]
+        DTDC[DTDC]
+        EKT[Ekart]
+        XPB[Xpressbees]
+        ECM[Ecom Express]
+        SHX[Shadowfax]
+        IPS[India Post]
+    end
+
+    subgraph DEST["Sinks"]
+        BUY[Buyers - WhatsApp/SMS/Email]
+        FIN[Finance systems - GST/Tally]
+        DW[Data warehouse]
+    end
+
+    SH --> OMS
+    WC --> OMS
+    AM --> OMS
+    FK --> OMS
+    ME --> OMS
+    CSV --> OMS
+    MAN --> OMS
+
+    OMS --> ALC --> PRC --> BOOK --> CN
+    CN --> TRACK
+    TRACK --> NDR
+    TRACK --> RTO
+    BOOK --> WAL
+    COD --> WAL
+    REC --> WAL
+    NDR --> NOT
+    TRACK --> NOT
+    NOT --> BUY
+    OMS --> CAT
+    OMS --> REPO
+    REPO --> DW
+    WAL --> FIN
+    INS --> BOOK
+    SUP --> ADM
+    RSK --> OMS
+    RSK --> ALC
+    CON --> SEL
+    SEL --> POL

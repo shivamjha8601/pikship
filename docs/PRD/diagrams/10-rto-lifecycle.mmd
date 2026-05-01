@@ -1,0 +1,15 @@
+stateDiagram-v2
+    [*] --> Forward_NDR_Exhausted
+    Forward_NDR_Exhausted --> RTO_Initiated
+    RTO_Initiated --> RTO_In_Transit
+    RTO_In_Transit --> RTO_Delivered_To_Seller
+    RTO_Delivered_To_Seller --> QC_Pending
+    QC_Pending --> QC_Passed
+    QC_Pending --> QC_Failed
+    QC_Pending --> QC_Partial
+    QC_Passed --> Buyer_Refund_Triggered
+    QC_Failed --> Seller_Decides
+    QC_Partial --> Buyer_Partial_Refund_Triggered
+    Buyer_Refund_Triggered --> [*]
+    Seller_Decides --> [*]
+    Buyer_Partial_Refund_Triggered --> [*]

@@ -1,0 +1,19 @@
+flowchart TD
+    A[Operator packs + photos parcel] --> B[Book shipment]
+    B --> C[Carrier picks up]
+    C --> D[Carrier reweighs at hub]
+    D --> E{Variance > tolerance?}
+    E -->|no| F[No dispute]
+    E -->|yes| G[Carrier sends reweigh data]
+    G --> H[Auto-eval engine]
+    H --> I{Decision}
+    I -->|small variance| J[Auto-accept charge]
+    I -->|seller evidence strong| K[Auto-dispute via carrier API]
+    I -->|needs seller input| L[Open for seller action]
+    K --> M[Carrier responds]
+    L --> N[Seller adds evidence]
+    N --> M
+    M --> O{Outcome}
+    O -->|seller won| P[Reverse charge in wallet]
+    O -->|carrier won| Q[Charge stands]
+    O -->|partial| R[Partial reversal]

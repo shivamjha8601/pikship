@@ -1,0 +1,38 @@
+flowchart TB
+    subgraph V0["v0 - Internal alpha"]
+        V0A[Tenancy + identity + onboarding]
+        V0B[Canonical model + 1 channel + 2 carriers]
+        V0C[Manual book + label + track]
+        V0D[Wallet basics + recharge]
+    end
+    subgraph V1["v1 - Public launch"]
+        V1A[5 channels: manual, CSV, Shopify, WC, Amazon]
+        V1B[8 carriers]
+        V1C[NDR + RTO + COD verification]
+        V1D[Wallet + COD remittance + weight disputes]
+        V1E[GST invoicing + reports]
+        V1F[Buyer pages: tracking, NDR, returns]
+        V1G[Public API + webhooks]
+        V1H[Notifications full]
+    end
+    subgraph V2["v2 - Scale"]
+        V2A[+Flipkart, Meesho, Magento, BigCommerce]
+        V2B[+5-7 carriers]
+        V2C[Mobile app]
+        V2D[Insurance integrated]
+        V2E[Reseller program live]
+        V2F[Custom reports + AI assist]
+        V2G[2-way WhatsApp NDR]
+    end
+    subgraph V3["v3 - Platform"]
+        V3A[White-label productized]
+        V3B[Hyperlocal]
+        V3C[B2B]
+        V3D[ONDC channel]
+        V3E[Pikshipp Express pilot]
+        V3F[International outbound]
+        V3G[SOC 2 / enterprise]
+    end
+    V0 --> V1
+    V1 --> V2
+    V2 --> V3

@@ -1,0 +1,18 @@
+flowchart LR
+    SH[Shopify webhook] --> ADP_SH[Shopify adapter]
+    AM[Amazon SQS event] --> ADP_AM[Amazon adapter]
+    WC[WooCommerce webhook] --> ADP_WC[WC adapter]
+    POL[Poll: Meesho/Flipkart] --> ADP_PL[Polling worker]
+    CSV[CSV upload] --> ADP_CSV[CSV adapter]
+    MAN[Manual form] --> ADP_M[Manual ingest]
+    PUBA[Public API] --> ADP_API[API ingest]
+
+    ADP_SH --> CAN[Canonical Order Builder]
+    ADP_AM --> CAN
+    ADP_WC --> CAN
+    ADP_PL --> CAN
+    ADP_CSV --> CAN
+    ADP_M --> CAN
+    ADP_API --> CAN
+    CAN --> DED[Idempotency / dedup]
+    DED --> OMS[OMS]

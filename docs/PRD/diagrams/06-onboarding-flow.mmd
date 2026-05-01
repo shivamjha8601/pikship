@@ -1,0 +1,20 @@
+flowchart TD
+    A[Landing page] --> B[Sign up - phone or email]
+    B --> C{OTP verify}
+    C -->|ok| D[Create user + tenant]
+    D --> E[Tenant under reseller scope]
+    E --> F[Business profile: name, GSTIN, address]
+    F --> G{Auto-verify GSTIN}
+    G -->|valid| H[Pull legal name from GSTN]
+    G -->|invalid| I[Manual review queue]
+    H --> J[Pickup address setup]
+    J --> K[Document upload: PAN, cancelled cheque]
+    K --> L{Auto-KYC: PAN + bank penny-drop}
+    L -->|all pass| M[Seller marked KYC_PASSED]
+    L -->|partial| N[Ops review]
+    N --> M
+    M --> O[Sandbox unlocked]
+    O --> P[First wallet recharge]
+    P --> Q[Connect channel]
+    Q --> R[First booking]
+    R --> S[Pickup, Tracking, Delivered]

@@ -1,0 +1,15 @@
+stateDiagram-v2
+    [*] --> Pending: Channel adapter ingest / manual create
+    Pending --> Ready_To_Ship: validation passes
+    Pending --> On_Hold: KYC/wallet/policy block
+    Ready_To_Ship --> Booked: shipment(s) booked
+    Ready_To_Ship --> Cancelled: seller cancels
+    On_Hold --> Ready_To_Ship: hold cleared
+    On_Hold --> Cancelled: hold abandoned
+    Booked --> Partially_Fulfilled: some shipments delivered
+    Booked --> Fulfilled: all shipments delivered
+    Booked --> Cancelled_Post_Booking: rare; carrier/seller initiated
+    Partially_Fulfilled --> Fulfilled: rest delivered
+    Fulfilled --> [*]
+    Cancelled --> [*]
+    Cancelled_Post_Booking --> [*]

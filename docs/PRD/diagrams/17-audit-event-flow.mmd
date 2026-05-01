@@ -1,0 +1,10 @@
+flowchart LR
+    A[Privileged action in any feature] --> B[Audit client emit]
+    B --> C[Validate required fields]
+    C --> D[Compute event hash + chain hash]
+    D --> E[Persist to immutable audit store]
+    E --> F[Async indexer for search]
+    E --> G[Anomaly detection feed]
+    G --> H[Risk + ops alerts on anomalies]
+    F --> I[Per-seller audit log UI]
+    F --> J[Pikshipp ops console search]

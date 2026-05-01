@@ -1,0 +1,34 @@
+sequenceDiagram
+    actor Op as Seller Operator
+    participant UI as Seller dashboard
+    participant API as API gateway
+    participant TEN as Tenancy guard
+    participant ORD as Order ctx
+    participant RAT as Rate engine
+    participant BK as Shipment ctx
+    participant ADP as Carrier adapter
+    participant CRR as Courier API
+    participant WAL as Financial ctx
+    participant NOT as Notification ctx
+
+    Op->>UI: Click "Book"
+    UI->>API: POST /shipments
+    API->>TEN: validate token + tenant scope
+    TEN-->>API: ok
+    API->>ORD: load order (tenant-scoped)
+    ORD-->>API: Order
+    API->>RAT: quote(order, courierId)
+    RAT-->>API: rate (quoted price)
+    API->>WAL: reserve(rate.amount)
+    WAL-->>API: hold-id
+    API->>BK: createShipment(order, courier, rate)
+    BK->>ADP: book(order, addr, weight, dims, COD)
+    ADP->>CRR: courier-specific book request
+    CRR-->>ADP: AWB + label URL
+    ADP-->>BK: normalized booking result
+    BK->>WAL: confirm(hold-id) - debit
+    WAL-->>BK: ledger entry id
+    BK-->>API: Shipment {AWB, label}
+    API-->>UI: 200 {AWB, label url}
+    BK->>NOT: emit ShipmentBooked event
+    NOT->>NOT: enqueue buyer + seller notifications
