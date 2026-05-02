@@ -68,8 +68,14 @@ func (e *engineImpl) Resolve(ctx context.Context, sellerID core.SellerID, key Ke
 		return v, nil
 	}
 
-	// 3. Seller override (cache first, then DB)
+	// 3. Seller override — cache first, then DB.
 	if v, ok := e.cache.SellerOverride(sellerID, key); ok {
+		e.maybeAudit(ctx, sellerID, def, SourceSellerOverride)
+		return v, nil
+	}
+	if v, found, err := e.repo.GetSellerOverride(ctx, sellerID, key); err == nil && found {
+		// Promote into cache so subsequent calls hit the cache layer.
+		e.cache.SetSellerOverride(sellerID, key, v)
 		e.maybeAudit(ctx, sellerID, def, SourceSellerOverride)
 		return v, nil
 	}
