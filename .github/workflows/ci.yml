@@ -1,0 +1,84 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  build-and-test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: root
+          POSTGRES_PASSWORD: root
+          POSTGRES_DB: pikshipp_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+          cache-dependency-path: backend/go.sum
+
+      - name: Install migrate
+        run: |
+          curl -sSL https://github.com/golang-migrate/migrate/releases/download/v4.19.1/migrate.linux-amd64.tar.gz \
+            | tar xz -C /usr/local/bin migrate
+
+      - name: DB bootstrap
+        working-directory: backend
+        env:
+          PGPASSWORD: root
+        run: |
+          psql -h 127.0.0.1 -U root -d pikshipp_test -c "CREATE EXTENSION IF NOT EXISTS pgcrypto;" || true
+          psql -h 127.0.0.1 -U root -d pikshipp_test -c "CREATE EXTENSION IF NOT EXISTS pg_trgm;" || true
+          migrate -path migrations \
+            -database "postgres://root:root@127.0.0.1:5432/pikshipp_test?sslmode=disable" \
+            up
+
+      - name: Build
+        working-directory: backend
+        run: go build ./...
+
+      - name: Vet
+        working-directory: backend
+        run: go vet ./...
+
+      - name: Test
+        working-directory: backend
+        env:
+          PIKSHIPP_DATABASE_URL: postgres://root:root@127.0.0.1:5432/pikshipp_test?sslmode=disable
+          PIKSHIPP_HTTP_ADDR: :9099
+          PIKSHIPP_SESSION_HMAC_KEY: test-hmac-key-for-ci-only
+        run: go test ./... -count=1 -timeout 120s
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+          cache-dependency-path: backend/go.sum
+      - uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          working-directory: backend
+          args: --timeout 5m
