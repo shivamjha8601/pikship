@@ -1,0 +1,16 @@
+# Secrets / credentials never go in the repo.
+*_oauth.json
+*credentials*.json
+.env
+.env.*
+!.env.example
+
+# User-supplied artefacts that landed in the repo root.
+*.pdf
+*.zip
+ExportBlock-*
+
+# Editor
+/.idea/
+/.vscode/
+.DS_Store
