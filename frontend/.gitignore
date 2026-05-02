@@ -5,3 +5,5 @@ dist
 .DS_Store
 .env*.local
 *.log
+tsconfig.tsbuildinfo
+next-env.d.ts
