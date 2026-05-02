@@ -99,6 +99,13 @@ func (id OrderID) String() string          { return uuid.UUID(id).String() }
 func (id OrderID) UUID() uuid.UUID         { return uuid.UUID(id) }
 func (id OrderID) IsZero() bool            { return uuid.UUID(id) == uuid.Nil }
 func OrderIDFromUUID(u uuid.UUID) OrderID  { return OrderID(u) }
+func ParseOrderID(s string) (OrderID, error) {
+	u, err := uuid.Parse(s)
+	if err != nil {
+		return OrderID{}, fmt.Errorf("core.ParseOrderID: %w", err)
+	}
+	return OrderID(u), nil
+}
 func (id OrderID) Value() (driver.Value, error) { return uuidValue(uuid.UUID(id)) }
 func (id *OrderID) Scan(src any) error          { return uuidScan(src, (*uuid.UUID)(id)) }
 
@@ -109,6 +116,13 @@ func (id ShipmentID) String() string             { return uuid.UUID(id).String()
 func (id ShipmentID) UUID() uuid.UUID            { return uuid.UUID(id) }
 func (id ShipmentID) IsZero() bool               { return uuid.UUID(id) == uuid.Nil }
 func ShipmentIDFromUUID(u uuid.UUID) ShipmentID  { return ShipmentID(u) }
+func ParseShipmentID(s string) (ShipmentID, error) {
+	u, err := uuid.Parse(s)
+	if err != nil {
+		return ShipmentID{}, fmt.Errorf("core.ParseShipmentID: %w", err)
+	}
+	return ShipmentID(u), nil
+}
 func (id ShipmentID) Value() (driver.Value, error) { return uuidValue(uuid.UUID(id)) }
 func (id *ShipmentID) Scan(src any) error          { return uuidScan(src, (*uuid.UUID)(id)) }
 
@@ -146,6 +160,13 @@ func (id PickupLocationID) String() string                   { return uuid.UUID(
 func (id PickupLocationID) UUID() uuid.UUID                  { return uuid.UUID(id) }
 func (id PickupLocationID) IsZero() bool                     { return uuid.UUID(id) == uuid.Nil }
 func PickupLocationIDFromUUID(u uuid.UUID) PickupLocationID  { return PickupLocationID(u) }
+func ParsePickupLocationID(s string) (PickupLocationID, error) {
+	u, err := uuid.Parse(s)
+	if err != nil {
+		return PickupLocationID{}, fmt.Errorf("core.ParsePickupLocationID: %w", err)
+	}
+	return PickupLocationID(u), nil
+}
 func (id PickupLocationID) Value() (driver.Value, error)     { return uuidValue(uuid.UUID(id)) }
 func (id *PickupLocationID) Scan(src any) error              { return uuidScan(src, (*uuid.UUID)(id)) }
 
@@ -263,6 +284,13 @@ func (id NDRCaseID) String() string            { return uuid.UUID(id).String() }
 func (id NDRCaseID) UUID() uuid.UUID           { return uuid.UUID(id) }
 func (id NDRCaseID) IsZero() bool              { return uuid.UUID(id) == uuid.Nil }
 func NDRCaseIDFromUUID(u uuid.UUID) NDRCaseID  { return NDRCaseID(u) }
+func ParseNDRCaseID(s string) (NDRCaseID, error) {
+	u, err := uuid.Parse(s)
+	if err != nil {
+		return NDRCaseID{}, fmt.Errorf("core.ParseNDRCaseID: %w", err)
+	}
+	return NDRCaseID(u), nil
+}
 func (id NDRCaseID) Value() (driver.Value, error) { return uuidValue(uuid.UUID(id)) }
 func (id *NDRCaseID) Scan(src any) error          { return uuidScan(src, (*uuid.UUID)(id)) }
 
