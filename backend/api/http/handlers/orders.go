@@ -50,7 +50,7 @@ func CreateOrderHandler(d OrdersDeps) http.HandlerFunc {
 
 		var req orders.CreateRequest
 		if err := decode(r, &req); err != nil {
-			writeError(w, r, core.ErrInvalidArgument)
+			writeError(w, r, err)
 			return
 		}
 		req.SellerID = p.SellerID

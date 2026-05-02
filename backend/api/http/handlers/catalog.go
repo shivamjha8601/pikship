@@ -35,7 +35,7 @@ func CreatePickupHandler(d CatalogDeps) http.HandlerFunc {
 		p := auth.MustPrincipalFrom(r.Context())
 		var req catalog.PickupCreateRequest
 		if err := decode(r, &req); err != nil {
-			writeError(w, r, core.ErrInvalidArgument)
+			writeError(w, r, err)
 			return
 		}
 		req.SellerID = p.SellerID
@@ -84,7 +84,7 @@ func UpsertProductHandler(d CatalogDeps) http.HandlerFunc {
 		p := auth.MustPrincipalFrom(r.Context())
 		var req catalog.ProductUpsertRequest
 		if err := decode(r, &req); err != nil {
-			writeError(w, r, core.ErrInvalidArgument)
+			writeError(w, r, err)
 			return
 		}
 		req.SellerID = p.SellerID

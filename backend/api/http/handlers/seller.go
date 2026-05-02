@@ -6,7 +6,6 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/vishal1132/pikshipp/backend/internal/auth"
-	"github.com/vishal1132/pikshipp/backend/internal/core"
 	"github.com/vishal1132/pikshipp/backend/internal/seller"
 )
 
@@ -44,7 +43,7 @@ func SubmitKYCHandler(d SellerDeps) http.HandlerFunc {
 		p := auth.MustPrincipalFrom(r.Context())
 		var app seller.KYCApplication
 		if err := decode(r, &app); err != nil {
-			writeError(w, r, core.ErrInvalidArgument)
+			writeError(w, r, err)
 			return
 		}
 		if err := d.Seller.SubmitKYC(r.Context(), p.SellerID, app); err != nil {

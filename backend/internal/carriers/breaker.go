@@ -22,6 +22,7 @@ type Breaker struct {
 	state         BreakerState
 	failures      int
 	successes     int
+	inFlight      int // probes in flight while half-open; cap at halfOpenProbe
 	lastTrip      time.Time
 	threshold     int
 	resetTimeout  time.Duration
@@ -37,19 +38,31 @@ func DefaultBreaker() *Breaker {
 	}
 }
 
-// Allow returns true if the call should proceed.
+// Allow returns true if the call should proceed. In half-open state we
+// admit at most halfOpenProbe concurrent probes; further calls fail fast
+// until earlier probes resolve via RecordSuccess/RecordFailure.
 func (b *Breaker) Allow() bool {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	if b.state == BreakerOpen {
+	switch b.state {
+	case BreakerClosed:
+		return true
+	case BreakerOpen:
 		if time.Since(b.lastTrip) > b.resetTimeout {
 			b.state = BreakerHalfOpen
 			b.successes = 0
+			b.inFlight = 1
 			return true
 		}
 		return false
+	case BreakerHalfOpen:
+		if b.inFlight >= b.halfOpenProbe {
+			return false
+		}
+		b.inFlight++
+		return true
 	}
-	return true
+	return false
 }
 
 // RecordSuccess records a successful call.
@@ -58,9 +71,13 @@ func (b *Breaker) RecordSuccess() {
 	defer b.mu.Unlock()
 	b.failures = 0
 	if b.state == BreakerHalfOpen {
+		if b.inFlight > 0 {
+			b.inFlight--
+		}
 		b.successes++
 		if b.successes >= b.halfOpenProbe {
 			b.state = BreakerClosed
+			b.inFlight = 0
 		}
 	}
 }
@@ -69,10 +86,14 @@ func (b *Breaker) RecordSuccess() {
 func (b *Breaker) RecordFailure() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	if b.state == BreakerHalfOpen && b.inFlight > 0 {
+		b.inFlight--
+	}
 	b.failures++
 	if b.failures >= b.threshold {
 		b.state = BreakerOpen
 		b.lastTrip = time.Now()
+		b.inFlight = 0
 	}
 }
 

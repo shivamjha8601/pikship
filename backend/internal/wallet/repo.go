@@ -44,11 +44,17 @@ const (
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
         ON CONFLICT (ref_type, ref_id, direction) DO NOTHING
     `
+	// On conflict, only return the existing id when the prior hold is still
+	// active. Stale (expired/released/confirmed) rows would otherwise be
+	// handed back to callers who'd then fail Confirm/Release.
 	insertHoldSQL = `
         INSERT INTO wallet_hold
             (id, seller_id, wallet_id, amount_minor, ref_type, ref_id, expires_at)
         VALUES ($1,$2,$3,$4,$5,$6,$7)
-        ON CONFLICT (ref_type, ref_id) DO UPDATE SET id = wallet_hold.id
+        ON CONFLICT (ref_type, ref_id) DO UPDATE
+            SET id = CASE WHEN wallet_hold.status = 'active'
+                          THEN wallet_hold.id
+                          ELSE EXCLUDED.id END
         RETURNING id
     `
 	getHoldForUpdateSQL = `

@@ -9,10 +9,19 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/vishal1132/pikshipp/backend/internal/core"
 )
+
+// querier is the subset of pgx that both *pgxpool.Pool and pgx.Tx satisfy.
+// All repo methods take a querier so the service layer can decide whether
+// to run them against a shared seller-scoped tx (RLS enforced) or the pool.
+type querier interface {
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
 
 const (
 	insertOrderSQL = `
@@ -85,11 +94,7 @@ const (
     `
 )
 
-type repo struct{ pool *pgxpool.Pool }
-
-func newRepo(pool *pgxpool.Pool) *repo { return &repo{pool: pool} }
-
-func (r *repo) insertOrder(ctx context.Context, req CreateRequest) (Order, error) {
+func insertOrder(ctx context.Context, q querier, req CreateRequest) (Order, error) {
 	billingJSON, _ := json.Marshal(req.BillingAddress)
 	shippingJSON, _ := json.Marshal(req.ShippingAddress)
 	tagsArr := req.Tags
@@ -99,7 +104,7 @@ func (r *repo) insertOrder(ctx context.Context, req CreateRequest) (Order, error
 
 	var id uuid.UUID
 	var createdAt, updatedAt time.Time
-	err := r.pool.QueryRow(ctx, insertOrderSQL,
+	err := q.QueryRow(ctx, insertOrderSQL,
 		req.SellerID.UUID(),
 		req.Channel, req.ChannelOrderID, req.OrderRef,
 		req.BuyerName, req.BuyerPhone, req.BuyerEmail,
@@ -115,9 +120,8 @@ func (r *repo) insertOrder(ctx context.Context, req CreateRequest) (Order, error
 		return Order{}, fmt.Errorf("orders.insertOrder: %w", err)
 	}
 
-	// Insert lines
 	for i, line := range req.Lines {
-		_, err := r.pool.Exec(ctx, insertOrderLineSQL,
+		_, err := q.Exec(ctx, insertOrderLineSQL,
 			id, req.SellerID.UUID(), i+1,
 			line.SKU, line.Name, line.Quantity,
 			int64(line.UnitPricePaise), line.UnitWeightG,
@@ -128,28 +132,28 @@ func (r *repo) insertOrder(ctx context.Context, req CreateRequest) (Order, error
 		}
 	}
 
-	return r.getOrder(ctx, req.SellerID, core.OrderIDFromUUID(id))
+	return getOrder(ctx, q, req.SellerID, core.OrderIDFromUUID(id))
 }
 
-func (r *repo) getOrder(ctx context.Context, sellerID core.SellerID, id core.OrderID) (Order, error) {
-	o, err := r.scanOrder(r.pool.QueryRow(ctx, getOrderSQL, id.UUID(), sellerID.UUID()))
+func getOrder(ctx context.Context, q querier, sellerID core.SellerID, id core.OrderID) (Order, error) {
+	o, err := scanOrder(q.QueryRow(ctx, getOrderSQL, id.UUID(), sellerID.UUID()))
 	if err != nil {
 		return Order{}, err
 	}
-	o.Lines, err = r.getLines(ctx, id)
+	o.Lines, err = getLines(ctx, q, id)
 	return o, err
 }
 
-func (r *repo) getOrderByChannel(ctx context.Context, sellerID core.SellerID, channel, channelOrderID string) (Order, error) {
-	o, err := r.scanOrder(r.pool.QueryRow(ctx, getOrderByChannelSQL, sellerID.UUID(), channel, channelOrderID))
+func getOrderByChannel(ctx context.Context, q querier, sellerID core.SellerID, channel, channelOrderID string) (Order, error) {
+	o, err := scanOrder(q.QueryRow(ctx, getOrderByChannelSQL, sellerID.UUID(), channel, channelOrderID))
 	if err != nil {
 		return Order{}, err
 	}
-	o.Lines, err = r.getLines(ctx, o.ID)
+	o.Lines, err = getLines(ctx, q, o.ID)
 	return o, err
 }
 
-func (r *repo) scanOrder(row pgx.Row) (Order, error) {
+func scanOrder(row pgx.Row) (Order, error) {
 	var o Order
 	var id, sellerID, pickupID uuid.UUID
 	var billingJSON, shippingJSON []byte
@@ -189,8 +193,8 @@ func (r *repo) scanOrder(row pgx.Row) (Order, error) {
 	return o, nil
 }
 
-func (r *repo) getLines(ctx context.Context, orderID core.OrderID) ([]OrderLine, error) {
-	rows, err := r.pool.Query(ctx, getLinesSQL, orderID.UUID())
+func getLines(ctx context.Context, q querier, orderID core.OrderID) ([]OrderLine, error) {
+	rows, err := q.Query(ctx, getLinesSQL, orderID.UUID())
 	if err != nil {
 		return nil, fmt.Errorf("orders.getLines: %w", err)
 	}
@@ -208,42 +212,38 @@ func (r *repo) getLines(ctx context.Context, orderID core.OrderID) ([]OrderLine,
 	return lines, rows.Err()
 }
 
-func (r *repo) transition(ctx context.Context, sellerID core.SellerID, id core.OrderID, from, to OrderState, reason string) error {
-	o, err := r.getOrder(ctx, sellerID, id)
-	if err != nil {
-		return err
-	}
-	if o.State != from {
-		return fmt.Errorf("%w: order is %s not %s", core.ErrInvalidArgument, o.State, from)
-	}
+// transitionState performs a same-tx state change + state event insert.
+// Caller must already have validated the source state under FOR UPDATE.
+func transitionState(ctx context.Context, q querier, sellerID core.SellerID, id core.OrderID, from, to OrderState, reason string) error {
 	if !CanTransition(from, to) {
 		return fmt.Errorf("%w: %s→%s not allowed", core.ErrInvalidArgument, from, to)
 	}
-	_, err = r.pool.Exec(ctx, updateStateSQL, id.UUID(), string(to), sellerID.UUID())
-	if err != nil {
-		return fmt.Errorf("orders.transition: %w", err)
+	if _, err := q.Exec(ctx, updateStateSQL, id.UUID(), string(to), sellerID.UUID()); err != nil {
+		return fmt.Errorf("orders.transitionState: %w", err)
 	}
-	_, _ = r.pool.Exec(ctx, insertStateEventSQL, id.UUID(), sellerID.UUID(), string(from), string(to), reason)
+	if _, err := q.Exec(ctx, insertStateEventSQL, id.UUID(), sellerID.UUID(), string(from), string(to), reason); err != nil {
+		return fmt.Errorf("orders.transitionState event: %w", err)
+	}
 	return nil
 }
 
-func (r *repo) bookOrder(ctx context.Context, sellerID core.SellerID, id core.OrderID, ref BookedRef) error {
-	_, err := r.pool.Exec(ctx, bookOrderSQL, id.UUID(), ref.AWBNumber, ref.CarrierCode, sellerID.UUID())
+func bookOrderRow(ctx context.Context, q querier, sellerID core.SellerID, id core.OrderID, ref BookedRef) error {
+	_, err := q.Exec(ctx, bookOrderSQL, id.UUID(), ref.AWBNumber, ref.CarrierCode, sellerID.UUID())
 	return err
 }
 
-func (r *repo) cancelOrder(ctx context.Context, sellerID core.SellerID, id core.OrderID, reason string) error {
-	_, err := r.pool.Exec(ctx, cancelOrderSQL, id.UUID(), reason, sellerID.UUID())
+func cancelOrderRow(ctx context.Context, q querier, sellerID core.SellerID, id core.OrderID, reason string) error {
+	_, err := q.Exec(ctx, cancelOrderSQL, id.UUID(), reason, sellerID.UUID())
 	return err
 }
 
-func (r *repo) listOrders(ctx context.Context, sellerID core.SellerID, limit, offset int) ([]core.OrderID, error) {
+func listOrderIDs(ctx context.Context, q querier, sellerID core.SellerID, limit, offset int) ([]core.OrderID, error) {
 	if limit == 0 {
 		limit = 50
 	}
-	rows, err := r.pool.Query(ctx, listOrdersSQL, sellerID.UUID(), limit, offset)
+	rows, err := q.Query(ctx, listOrdersSQL, sellerID.UUID(), limit, offset)
 	if err != nil {
-		return nil, fmt.Errorf("orders.listOrders: %w", err)
+		return nil, fmt.Errorf("orders.listOrderIDs: %w", err)
 	}
 	defer rows.Close()
 	var ids []core.OrderID

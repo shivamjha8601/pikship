@@ -92,7 +92,7 @@ func NDRActionHandler(d TrackingDeps) http.HandlerFunc {
 			NewAddress *core.Address `json:"new_address,omitempty"`
 		}
 		if err := decode(r, &req); err != nil {
-			writeError(w, r, core.ErrInvalidArgument)
+			writeError(w, r, err)
 			return
 		}
 		switch req.Action {

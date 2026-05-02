@@ -31,8 +31,8 @@ type ProductService interface {
 
 // PickupLocation is one row from pickup_location.
 type PickupLocation struct {
-	ID           core.PickupLocationID
-	SellerID     core.SellerID `json:"seller_id"`
+	ID           core.PickupLocationID `json:"id"`
+	SellerID     core.SellerID         `json:"seller_id"`
 	Label        string        `json:"label"`
 	ContactName  string        `json:"contact_name"`
 	ContactPhone string        `json:"contact_phone"`

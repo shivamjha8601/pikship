@@ -41,7 +41,7 @@ func SelectSellerHandler(d IdentityDeps) http.HandlerFunc {
 			SellerID string `json:"seller_id"`
 		}
 		if err := decode(r, &req); err != nil {
-			writeError(w, r, core.ErrInvalidArgument)
+			writeError(w, r, err)
 			return
 		}
 		sellerID, err := core.ParseSellerID(req.SellerID)
@@ -89,7 +89,7 @@ func InviteHandler(d IdentityDeps) http.HandlerFunc {
 			Roles []core.SellerRole  `json:"roles"`
 		}
 		if err := decode(r, &req); err != nil {
-			writeError(w, r, core.ErrInvalidArgument)
+			writeError(w, r, err)
 			return
 		}
 		inv, err := d.Identity.InviteUserToSeller(r.Context(), p.SellerID, p.UserID, identity.InviteInput{

@@ -59,7 +59,7 @@ func UpgradeToEnterpriseHandler(d AdminDeps) http.HandlerFunc {
 			RateCardID string         `json:"rate_card_id,omitempty"`
 		}
 		if err := decode(r, &body); err != nil {
-			writeError(w, r, core.ErrInvalidArgument)
+			writeError(w, r, err)
 			return
 		}
 		if body.NewType == "" {

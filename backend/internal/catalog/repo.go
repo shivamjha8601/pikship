@@ -5,14 +5,22 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/vishal1132/pikshipp/backend/internal/core"
 )
+
+// querier is the subset of pgx that both *pgxpool.Pool and pgx.Tx satisfy.
+// All repo methods take a querier so the service layer routes them through
+// a seller-scoped tx (RLS enforced).
+type querier interface {
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
 
 const (
 	insertPickupSQL = `
@@ -95,34 +103,37 @@ const (
         UPDATE product SET deleted_at = now(), active = false
         WHERE seller_id = $1 AND sku = $2 AND deleted_at IS NULL
     `
+	updatePickupSQL = `
+        UPDATE pickup_location SET
+            label=$3, contact_name=$4, contact_phone=$5, contact_email=$6,
+            address=$7::jsonb, pincode=$8, state=$9, pickup_hours=$10, gstin=$11,
+            updated_at=now()
+        WHERE id=$1 AND seller_id=$2
+    `
 )
 
-type repo struct{ pool *pgxpool.Pool }
-
-func newRepo(pool *pgxpool.Pool) *repo { return &repo{pool: pool} }
-
-func (r *repo) insertPickup(ctx context.Context, req PickupCreateRequest) (PickupLocation, error) {
+func insertPickup(ctx context.Context, q querier, req PickupCreateRequest) (PickupLocation, error) {
 	addrJSON, _ := json.Marshal(req.Address)
-	return r.scanPickup(r.pool.QueryRow(ctx, insertPickupSQL,
+	return scanPickup(q.QueryRow(ctx, insertPickupSQL,
 		req.SellerID.UUID(), req.Label, req.ContactName, req.ContactPhone, req.ContactEmail,
 		addrJSON, string(req.Pincode), req.State, req.PickupHours, req.GSTIN,
 		req.Active, req.IsDefault,
 	))
 }
 
-func (r *repo) getPickup(ctx context.Context, sellerID core.SellerID, id core.PickupLocationID) (PickupLocation, error) {
-	return r.scanPickup(r.pool.QueryRow(ctx, getPickupSQL, id.UUID(), sellerID.UUID()))
+func getPickup(ctx context.Context, q querier, sellerID core.SellerID, id core.PickupLocationID) (PickupLocation, error) {
+	return scanPickup(q.QueryRow(ctx, getPickupSQL, id.UUID(), sellerID.UUID()))
 }
 
-func (r *repo) listPickups(ctx context.Context, sellerID core.SellerID) ([]PickupLocation, error) {
-	rows, err := r.pool.Query(ctx, listPickupsSQL, sellerID.UUID())
+func listPickups(ctx context.Context, q querier, sellerID core.SellerID) ([]PickupLocation, error) {
+	rows, err := q.Query(ctx, listPickupsSQL, sellerID.UUID())
 	if err != nil {
 		return nil, fmt.Errorf("catalog.listPickups: %w", err)
 	}
 	defer rows.Close()
 	var out []PickupLocation
 	for rows.Next() {
-		p, err := r.scanPickup(rows)
+		p, err := scanPickup(rows)
 		if err != nil {
 			return nil, err
 		}
@@ -131,7 +142,7 @@ func (r *repo) listPickups(ctx context.Context, sellerID core.SellerID) ([]Picku
 	return out, rows.Err()
 }
 
-func (r *repo) scanPickup(row interface{ Scan(...any) error }) (PickupLocation, error) {
+func scanPickup(row interface{ Scan(...any) error }) (PickupLocation, error) {
 	var p PickupLocation
 	var id, sellerID uuid.UUID
 	var addrJSON []byte
@@ -153,45 +164,45 @@ func (r *repo) scanPickup(row interface{ Scan(...any) error }) (PickupLocation, 
 	return p, nil
 }
 
-func (r *repo) setDefaultPickup(ctx context.Context, sellerID core.SellerID, id core.PickupLocationID) error {
-	_, err := r.pool.Exec(ctx, setDefaultPickupSQL, sellerID.UUID(), id.UUID())
+func setDefaultPickup(ctx context.Context, q querier, sellerID core.SellerID, id core.PickupLocationID) error {
+	_, err := q.Exec(ctx, setDefaultPickupSQL, sellerID.UUID(), id.UUID())
 	return err
 }
 
-func (r *repo) deactivatePickup(ctx context.Context, sellerID core.SellerID, id core.PickupLocationID) error {
-	_, err := r.pool.Exec(ctx, deactivatePickupSQL, id.UUID(), sellerID.UUID())
+func deactivatePickup(ctx context.Context, q querier, sellerID core.SellerID, id core.PickupLocationID) error {
+	_, err := q.Exec(ctx, deactivatePickupSQL, id.UUID(), sellerID.UUID())
 	return err
 }
 
-func (r *repo) softDeletePickup(ctx context.Context, sellerID core.SellerID, id core.PickupLocationID) error {
-	_, err := r.pool.Exec(ctx, softDeletePickupSQL, id.UUID(), sellerID.UUID())
+func softDeletePickup(ctx context.Context, q querier, sellerID core.SellerID, id core.PickupLocationID) error {
+	_, err := q.Exec(ctx, softDeletePickupSQL, id.UUID(), sellerID.UUID())
 	return err
 }
 
-func (r *repo) upsertProduct(ctx context.Context, req ProductUpsertRequest) (Product, error) {
-	return r.scanProduct(r.pool.QueryRow(ctx, upsertProductSQL,
+func upsertProduct(ctx context.Context, q querier, req ProductUpsertRequest) (Product, error) {
+	return scanProduct(q.QueryRow(ctx, upsertProductSQL,
 		req.SellerID.UUID(), req.SKU, req.Name, req.Description,
 		req.UnitWeightG, req.LengthMM, req.WidthMM, req.HeightMM,
 		req.HSNCode, req.CategoryHint, int64(req.UnitPricePaise), req.Active,
 	))
 }
 
-func (r *repo) getProductBySKU(ctx context.Context, sellerID core.SellerID, sku string) (Product, error) {
-	return r.scanProduct(r.pool.QueryRow(ctx, getProductBySKUSQL, sellerID.UUID(), sku))
+func getProductBySKU(ctx context.Context, q querier, sellerID core.SellerID, sku string) (Product, error) {
+	return scanProduct(q.QueryRow(ctx, getProductBySKUSQL, sellerID.UUID(), sku))
 }
 
-func (r *repo) listProducts(ctx context.Context, sellerID core.SellerID, limit, offset int) ([]Product, error) {
+func listProducts(ctx context.Context, q querier, sellerID core.SellerID, limit, offset int) ([]Product, error) {
 	if limit == 0 {
 		limit = 50
 	}
-	rows, err := r.pool.Query(ctx, listProductsSQL, sellerID.UUID(), limit, offset)
+	rows, err := q.Query(ctx, listProductsSQL, sellerID.UUID(), limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("catalog.listProducts: %w", err)
 	}
 	defer rows.Close()
 	var out []Product
 	for rows.Next() {
-		p, err := r.scanProduct(rows)
+		p, err := scanProduct(rows)
 		if err != nil {
 			return nil, err
 		}
@@ -200,7 +211,7 @@ func (r *repo) listProducts(ctx context.Context, sellerID core.SellerID, limit, 
 	return out, rows.Err()
 }
 
-func (r *repo) scanProduct(row interface{ Scan(...any) error }) (Product, error) {
+func scanProduct(row interface{ Scan(...any) error }) (Product, error) {
 	var p Product
 	var id, sellerID uuid.UUID
 	var price int64
@@ -220,18 +231,18 @@ func (r *repo) scanProduct(row interface{ Scan(...any) error }) (Product, error)
 	return p, nil
 }
 
-func (r *repo) softDeleteProduct(ctx context.Context, sellerID core.SellerID, sku string) error {
-	_, err := r.pool.Exec(ctx, softDeleteProductSQL, sellerID.UUID(), sku)
+func softDeleteProduct(ctx context.Context, q querier, sellerID core.SellerID, sku string) error {
+	_, err := q.Exec(ctx, softDeleteProductSQL, sellerID.UUID(), sku)
 	return err
 }
 
-// updatePickup applies non-nil patch fields.
-func (r *repo) updatePickup(ctx context.Context, sellerID core.SellerID, id core.PickupLocationID, patch PickupPatch) error {
-	p, err := r.getPickup(ctx, sellerID, id)
+// updatePickup applies non-nil patch fields. Reads current row, applies patch,
+// writes back. Caller must run inside a tx.
+func updatePickup(ctx context.Context, q querier, sellerID core.SellerID, id core.PickupLocationID, patch PickupPatch) error {
+	p, err := getPickup(ctx, q, sellerID, id)
 	if err != nil {
 		return err
 	}
-	// Apply patch.
 	if patch.Label != nil {
 		p.Label = *patch.Label
 	}
@@ -261,20 +272,10 @@ func (r *repo) updatePickup(ctx context.Context, sellerID core.SellerID, id core
 	}
 
 	addrJSON, _ := json.Marshal(p.Address)
-	updateSQL := `
-        UPDATE pickup_location SET
-            label=$3, contact_name=$4, contact_phone=$5, contact_email=$6,
-            address=$7::jsonb, pincode=$8, state=$9, pickup_hours=$10, gstin=$11,
-            updated_at=now()
-        WHERE id=$1 AND seller_id=$2
-    `
-	_, err = r.pool.Exec(ctx, updateSQL,
+	_, err = q.Exec(ctx, updatePickupSQL,
 		id.UUID(), sellerID.UUID(),
 		p.Label, p.ContactName, p.ContactPhone, p.ContactEmail,
 		addrJSON, string(p.Pincode), p.State, p.PickupHours, p.GSTIN,
 	)
 	return err
 }
-
-// Ensure time import is used.
-var _ = time.Now

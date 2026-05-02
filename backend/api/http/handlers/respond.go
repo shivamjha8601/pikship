@@ -41,6 +41,12 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 	writeJSON(w, code, map[string]string{"error": msg})
 }
 
+// decode parses JSON body into dst. Returns an error wrapping
+// core.ErrInvalidArgument so writeError maps it to a 400 with the JSON
+// parse message (instead of a generic 500).
 func decode(r *http.Request, dst any) error {
-	return json.NewDecoder(r.Body).Decode(dst)
+	if err := json.NewDecoder(r.Body).Decode(dst); err != nil {
+		return errors.Join(core.ErrInvalidArgument, err)
+	}
+	return nil
 }

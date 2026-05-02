@@ -92,7 +92,7 @@ func ProvisionSellerHandler(d OnboardingDeps) http.HandlerFunc {
 			SignupSource string `json:"signup_source"`
 		}
 		if err := decode(r, &body); err != nil {
-			writeError(w, r, core.ErrInvalidArgument)
+			writeError(w, r, err)
 			return
 		}
 		if body.LegalName == "" || body.DisplayName == "" || body.PrimaryPhone == "" {
