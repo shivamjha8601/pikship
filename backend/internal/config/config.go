@@ -59,6 +59,11 @@ type Config struct {
 	GoogleOAuthClientID         string `env:"GOOGLE_OAUTH_CLIENT_ID"          envDefault:""`
 	GoogleOAuthRedirectURI      string `env:"GOOGLE_OAUTH_REDIRECT_URI"       envDefault:""`
 	GoogleOAuthFrontendReturnURL string `env:"GOOGLE_OAUTH_FRONTEND_RETURN_URL" envDefault:""`
+
+	// Sentry — when DSN is empty Sentry is disabled (no init, no overhead).
+	SentryDSN              string  `env:"SENTRY_DSN"                envDefault:""`
+	SentryEnvironment      string  `env:"SENTRY_ENVIRONMENT"        envDefault:"production"`
+	SentryTracesSampleRate float64 `env:"SENTRY_TRACES_SAMPLE_RATE" envDefault:"1.0"`
 }
 
 // Load parses env vars into Config and validates them.

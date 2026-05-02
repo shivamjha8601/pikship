@@ -32,6 +32,7 @@ import (
 	"github.com/vishal1132/pikshipp/backend/internal/ndr"
 	"github.com/vishal1132/pikshipp/backend/internal/observability/dbtx"
 	"github.com/vishal1132/pikshipp/backend/internal/observability/logger"
+	"github.com/vishal1132/pikshipp/backend/internal/observability/sentryx"
 	"github.com/vishal1132/pikshipp/backend/internal/orders"
 	"github.com/vishal1132/pikshipp/backend/internal/policy"
 	"github.com/vishal1132/pikshipp/backend/internal/reports"
@@ -75,6 +76,14 @@ func run(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 		slog.String("role", string(cfg.Role)),
 		slog.String("version", cfg.Version),
 	)
+
+	// ── Sentry ───────────────────────────────────────────────────────────
+	// Init early so any startup error gets reported. Empty DSN → no-op.
+	sentryFlush, err := sentryx.Init(cfg, log)
+	if err != nil {
+		return err
+	}
+	defer sentryFlush()
 
 	// ── Secrets ──────────────────────────────────────────────────────────
 	// v0: read from env vars. Key names match PIKSHIPP_<UPPER> convention.

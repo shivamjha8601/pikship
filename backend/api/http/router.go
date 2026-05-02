@@ -18,6 +18,7 @@ import (
 	"github.com/vishal1132/pikshipp/backend/internal/limits"
 	"github.com/vishal1132/pikshipp/backend/internal/ndr"
 	"github.com/vishal1132/pikshipp/backend/internal/observability/metrics"
+	"github.com/vishal1132/pikshipp/backend/internal/observability/sentryx"
 	"github.com/vishal1132/pikshipp/backend/internal/orders"
 	"github.com/vishal1132/pikshipp/backend/internal/reports"
 	"github.com/vishal1132/pikshipp/backend/internal/seller"
@@ -63,6 +64,9 @@ func NewAppRouter(deps AppDeps, requestTimeout time.Duration) chi.Router {
 	r.Use(InjectLogger(deps.Log))
 	r.Use(RequestLogger)
 	r.Use(SecurityHeaders)
+	// Sentry sits inside Recover (so panics propagate up to it), outside
+	// Timeout (so the timeout wait time is part of the tracked transaction).
+	r.Use(sentryx.Middleware)
 	r.Use(Timeout(requestTimeout))
 	r.Use(chimiddleware.Compress(5))
 
