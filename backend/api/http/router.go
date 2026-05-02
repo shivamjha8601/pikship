@@ -62,11 +62,14 @@ func NewAppRouter(deps AppDeps, requestTimeout time.Duration) chi.Router {
 	r.Get("/readyz", readyz(deps.Pools, requestTimeout))
 	r.Handle("/metrics", metrics.Handler())
 
-	// Public tracking (no auth)
+	// Public tracking + carrier webhooks (no auth)
 	handlers.MountPublicTracking(r, handlers.TrackingDeps{
 		Tracking: deps.Tracking,
 		BuyerExp: deps.BuyerExp,
 		NDR:      deps.NDR,
+	})
+	handlers.MountWebhooks(r, handlers.WebhookDeps{
+		Tracking: deps.Tracking,
 	})
 
 	// Authenticated API
