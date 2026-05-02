@@ -70,9 +70,17 @@ type service struct {
 	log       *slog.Logger
 }
 
-// New constructs the tracking service.
-func New(pool *pgxpool.Pool, sh shipments.Service, reg *carriers.Registry, log *slog.Logger) Service {
+// New constructs the tracking service. sh may be nil if state transitions
+// are not needed (e.g. read-only tracking queries); call SetShipments before
+// ingesting events if transitions should fire.
+func New(pool *pgxpool.Pool, sh shipments.Service, reg *carriers.Registry, log *slog.Logger) *service {
 	return &service{pool: pool, shipments: sh, registry: reg, log: log}
+}
+
+// SetShipments wires the shipment service after construction (breaks the
+// circular initialisation when tracking and shipments depend on each other).
+func (s *service) SetShipments(sh shipments.Service) {
+	s.shipments = sh
 }
 
 const insertEventSQL = `

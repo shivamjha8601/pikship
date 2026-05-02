@@ -53,7 +53,7 @@ const (
 type SellerType string
 
 const (
-	SellerTypeSmallMedium SellerType = "small_medium"
+	SellerTypeSmallMedium SellerType = "small_business" // matches DB check constraint
 	SellerTypeMidMarket   SellerType = "mid_market"
 	SellerTypeEnterprise  SellerType = "enterprise"
 )
