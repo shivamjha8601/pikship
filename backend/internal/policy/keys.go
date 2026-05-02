@@ -40,4 +40,11 @@ const (
 	// Features
 	KeyFeatureInsurance         Key = "features.insurance"
 	KeyFeatureWeightDisputeAuto Key = "features.weight_dispute_auto"
+
+	// Usage limits (enforced at runtime)
+	KeyShipmentsPerMonthLimit Key = "limits.shipments_per_month"
+	KeyOrdersPerDayLimit      Key = "limits.orders_per_day"
+
+	// Enterprise / contract feature gates
+	KeyContractActiveID Key = "contract.active_id"
 )

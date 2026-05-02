@@ -1,18 +1,21 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
 
 	"github.com/vishal1132/pikshipp/backend/internal/auth"
 	"github.com/vishal1132/pikshipp/backend/internal/core"
+	"github.com/vishal1132/pikshipp/backend/internal/limits"
 	"github.com/vishal1132/pikshipp/backend/internal/orders"
 )
 
 // OrdersDeps are the dependencies for order handlers.
 type OrdersDeps struct {
 	Orders orders.Service
+	Limits limits.Guard // optional; nil disables enforcement
 }
 
 func ListOrdersHandler(d OrdersDeps) http.HandlerFunc {
@@ -32,6 +35,19 @@ func ListOrdersHandler(d OrdersDeps) http.HandlerFunc {
 func CreateOrderHandler(d OrdersDeps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		p := auth.MustPrincipalFrom(r.Context())
+
+		// Enforce daily order limit (contract-driven).
+		if d.Limits != nil {
+			if err := d.Limits.CheckOrderDay(r.Context(), p.SellerID); err != nil {
+				if errors.Is(err, limits.ErrLimitExceeded) {
+					writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": err.Error()})
+					return
+				}
+				writeError(w, r, err)
+				return
+			}
+		}
+
 		var req orders.CreateRequest
 		if err := decode(r, &req); err != nil {
 			writeError(w, r, core.ErrInvalidArgument)
@@ -72,7 +88,9 @@ func CancelOrderHandler(d OrdersDeps) http.HandlerFunc {
 			writeError(w, r, core.ErrInvalidArgument)
 			return
 		}
-		var req struct{ Reason string `json:"reason"` }
+		var req struct {
+			Reason string `json:"reason"`
+		}
 		_ = decode(r, &req)
 		if err := d.Orders.Cancel(r.Context(), p.SellerID, id, req.Reason); err != nil {
 			writeError(w, r, err)

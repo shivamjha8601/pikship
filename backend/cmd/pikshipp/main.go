@@ -23,8 +23,10 @@ import (
 	"github.com/vishal1132/pikshipp/backend/internal/buyerexp"
 	"github.com/vishal1132/pikshipp/backend/internal/catalog"
 	"github.com/vishal1132/pikshipp/backend/internal/config"
+	"github.com/vishal1132/pikshipp/backend/internal/contracts"
 	"github.com/vishal1132/pikshipp/backend/internal/core"
 	"github.com/vishal1132/pikshipp/backend/internal/identity"
+	"github.com/vishal1132/pikshipp/backend/internal/limits"
 	"github.com/vishal1132/pikshipp/backend/internal/ndr"
 	"github.com/vishal1132/pikshipp/backend/internal/observability/dbtx"
 	"github.com/vishal1132/pikshipp/backend/internal/observability/logger"
@@ -181,6 +183,10 @@ func run(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 	// Reports (uses reports pool — read-only).
 	reportsSvc := reports.New(poolReports)
 
+	// Contracts + limits — needed by the enterprise upgrade flow.
+	contractsSvc := contracts.New(poolAdmin, auditSvc, policyEngine)
+	limitsGuard := limits.New(poolReports, policyEngine)
+
 	// ── HTTP server ───────────────────────────────────────────────────────
 	var srv *http.Server
 	if cfg.Role == config.RoleAPI || cfg.Role == config.RoleAll {
@@ -199,6 +205,8 @@ func run(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 			BuyerExp:  buyerSvc,
 			NDR:       ndrSvc,
 			Reports:   reportsSvc,
+			Contracts: contractsSvc,
+			Limits:    limitsGuard,
 			AppPool:   poolApp,
 			DevMode:   cfg.DevMode,
 		}, cfg.HealthcheckTimeout)

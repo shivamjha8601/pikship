@@ -62,6 +62,31 @@ func (s *serviceImpl) Activate(ctx context.Context, id core.SellerID, reason str
 	return nil
 }
 
+func (s *serviceImpl) ChangeType(ctx context.Context, id core.SellerID, newType core.SellerType, by core.UserID) error {
+	old, err := s.repo.getSeller(ctx, id)
+	if err != nil {
+		return fmt.Errorf("seller.ChangeType: %w", err)
+	}
+	if old.SellerType == newType {
+		return nil
+	}
+	if _, err := s.repo.pool.Exec(ctx, `UPDATE seller SET seller_type = $2, updated_at = now() WHERE id = $1`,
+		id.UUID(), string(newType)); err != nil {
+		return fmt.Errorf("seller.ChangeType: %w", err)
+	}
+	_ = s.audit.EmitAsync(ctx, audit.Event{
+		SellerID: &id,
+		Action:   "seller.type_changed",
+		Target:   audit.Target{Kind: "seller", Ref: id.String()},
+		Payload: map[string]any{
+			"from": string(old.SellerType),
+			"to":   string(newType),
+			"by":   by.String(),
+		},
+	})
+	return nil
+}
+
 func (s *serviceImpl) Suspend(ctx context.Context, id core.SellerID, reason, category string, until *time.Time) error {
 	sl, err := s.repo.getSeller(ctx, id)
 	if err != nil {

@@ -12,8 +12,10 @@ import (
 	"github.com/vishal1132/pikshipp/backend/internal/auth"
 	"github.com/vishal1132/pikshipp/backend/internal/buyerexp"
 	"github.com/vishal1132/pikshipp/backend/internal/catalog"
+	"github.com/vishal1132/pikshipp/backend/internal/contracts"
 	"github.com/vishal1132/pikshipp/backend/internal/idempotency"
 	"github.com/vishal1132/pikshipp/backend/internal/identity"
+	"github.com/vishal1132/pikshipp/backend/internal/limits"
 	"github.com/vishal1132/pikshipp/backend/internal/ndr"
 	"github.com/vishal1132/pikshipp/backend/internal/observability/metrics"
 	"github.com/vishal1132/pikshipp/backend/internal/orders"
@@ -40,6 +42,8 @@ type AppDeps struct {
 	BuyerExp  buyerexp.Service
 	NDR       ndr.Service
 	Reports   reports.Service
+	Contracts contracts.Service
+	Limits    limits.Guard
 	AppPool   *pgxpool.Pool
 	DevMode   bool // exposes /v1/auth/dev-login when true
 }
@@ -94,17 +98,28 @@ func NewAppRouter(deps AppDeps, requestTimeout time.Duration) chi.Router {
 			})
 			handlers.MountSellerProvisioning(r, onboardingDeps)
 
+			adminDeps := handlers.AdminDeps{
+				Seller:    deps.Seller,
+				Contracts: deps.Contracts,
+				Limits:    deps.Limits,
+			}
+			handlers.MountAdmin(r, adminDeps) // /admin/sellers/{id}/upgrade
+
 			// Seller-scoped routes
 			r.Group(func(r chi.Router) {
 				r.Use(SellerScope)
 				r.Use(idempotency.Middleware(deps.AppPool))
 
 				handlers.MountSeller(r, handlers.SellerDeps{Seller: deps.Seller})
+				handlers.MountSellerContractViews(r, adminDeps)
 				handlers.MountCatalog(r, handlers.CatalogDeps{
 					Pickup:  deps.Pickup,
 					Product: deps.Product,
 				})
-				handlers.MountOrders(r, handlers.OrdersDeps{Orders: deps.Orders})
+				handlers.MountOrders(r, handlers.OrdersDeps{
+					Orders: deps.Orders,
+					Limits: deps.Limits,
+				})
 				handlers.MountShipments(r, handlers.ShipmentDeps{
 					Shipments: deps.Shipments,
 					Wallet:    deps.Wallet,

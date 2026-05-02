@@ -21,6 +21,11 @@ type Service interface {
 	// Activate transitions a seller from sandbox → active.
 	Activate(ctx context.Context, id core.SellerID, reason string) error
 
+	// ChangeType updates the seller's seller_type. Used by the enterprise
+	// upgrade flow. Triggers policy re-resolution because seller-type
+	// defaults change.
+	ChangeType(ctx context.Context, id core.SellerID, newType core.SellerType, by core.UserID) error
+
 	// Suspend transitions a seller to suspended.
 	Suspend(ctx context.Context, id core.SellerID, reason, category string, until *time.Time) error
 

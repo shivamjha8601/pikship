@@ -132,7 +132,14 @@ var Definitions = []Definition{
 	{Key: KeyBuyerExpCustomDomain, ValueType: TypeString, DefaultGlobal: StringValue(""), Description: "Custom tracking domain", RegisteredIn: "buyerexp", AddedInVersion: "v0"},
 
 	// Features
-	{Key: KeyFeatureInsurance, ValueType: TypeBool, DefaultGlobal: BoolValue(false), Description: "Insurance attach available for this seller", RegisteredIn: "insurance", AddedInVersion: "v0"},
+	{
+		Key: KeyFeatureInsurance, ValueType: TypeBool,
+		DefaultGlobal:   BoolValue(false),
+		LockCapable:     true,
+		OverrideAllowed: true,
+		Description:     "Insurance attach available for this seller",
+		RegisteredIn:    "insurance", AddedInVersion: "v0",
+	},
 	{
 		Key: KeyFeatureWeightDisputeAuto, ValueType: TypeBool,
 		DefaultGlobal: BoolValue(false),
@@ -140,8 +147,41 @@ var Definitions = []Definition{
 			core.SellerTypeMidMarket:  BoolValue(true),
 			core.SellerTypeEnterprise: BoolValue(true),
 		},
-		Description: "Auto weight-dispute filing on this seller's behalf",
+		LockCapable: true, OverrideAllowed: true,
+		Description:  "Auto weight-dispute filing on this seller's behalf",
 		RegisteredIn: "recon", AddedInVersion: "v0",
+	},
+
+	// Usage limits — enforced at runtime by guards.
+	// 0 means unlimited; positive value caps the rolling window.
+	{
+		Key: KeyShipmentsPerMonthLimit, ValueType: TypeInt64,
+		DefaultGlobal: Int64Value(500), // small_business default cap
+		DefaultsByType: map[core.SellerType]Value{
+			core.SellerTypeMidMarket:  Int64Value(10_000),
+			core.SellerTypeEnterprise: Int64Value(0), // unlimited for enterprise
+		},
+		LockCapable: true, OverrideAllowed: true,
+		Description:    "Hard cap on shipments per calendar month; 0 = unlimited",
+		RegisteredIn:   "shipments", AddedInVersion: "v0",
+	},
+	{
+		Key: KeyOrdersPerDayLimit, ValueType: TypeInt64,
+		DefaultGlobal: Int64Value(200),
+		DefaultsByType: map[core.SellerType]Value{
+			core.SellerTypeMidMarket:  Int64Value(2_000),
+			core.SellerTypeEnterprise: Int64Value(0),
+		},
+		LockCapable: true, OverrideAllowed: true,
+		Description:    "Hard cap on orders created per calendar day; 0 = unlimited",
+		RegisteredIn:   "orders", AddedInVersion: "v0",
+	},
+	{
+		Key: KeyContractActiveID, ValueType: TypeString,
+		DefaultGlobal:   StringValue(""),
+		OverrideAllowed: true,
+		Description:     "Currently active contract ID for this seller (empty = no contract)",
+		RegisteredIn:    "contracts", AddedInVersion: "v0",
 	},
 }
 
