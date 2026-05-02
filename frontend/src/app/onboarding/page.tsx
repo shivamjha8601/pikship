@@ -27,8 +27,13 @@ export default function OnboardingPage() {
 
   React.useEffect(() => {
     if (loading) return;
-    if (!user) router.replace("/login");
-    if (hasSeller) router.replace("/dashboard");
+    if (!user) {
+      router.replace("/login");
+      return;
+    }
+    if (hasSeller) {
+      router.replace("/dashboard");
+    }
   }, [user, hasSeller, loading, router]);
 
   React.useEffect(() => {
@@ -152,18 +157,28 @@ export default function OnboardingPage() {
             </CardHeader>
             <CardBody>
               <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="GSTIN" hint="15-character format, e.g. 29AABCU9603R1ZX">
+                <Field
+                  label="GSTIN"
+                  hint="15-character format, e.g. 29AABCU9603R1ZX"
+                  error={gstin && !isGSTIN(gstin) ? "Invalid GSTIN format" : undefined}
+                >
                   <Input
                     placeholder="29AABCU9603R1ZX"
                     value={gstin}
-                    onChange={(e) => setGstin(e.target.value)}
+                    onChange={(e) => setGstin(e.target.value.toUpperCase())}
+                    maxLength={15}
                   />
                 </Field>
-                <Field label="PAN" hint="10-character format, e.g. AABCU9603R">
+                <Field
+                  label="PAN"
+                  hint="10-character format, e.g. AABCU9603R"
+                  error={pan && !isPAN(pan) ? "Invalid PAN format" : undefined}
+                >
                   <Input
                     placeholder="AABCU9603R"
                     value={pan}
-                    onChange={(e) => setPan(e.target.value)}
+                    onChange={(e) => setPan(e.target.value.toUpperCase())}
+                    maxLength={10}
                   />
                 </Field>
               </div>
@@ -174,7 +189,11 @@ export default function OnboardingPage() {
               )}
               <div className="mt-6 flex justify-end gap-2">
                 <Button variant="ghost" onClick={() => setStep(2)}>Skip for now</Button>
-                <Button onClick={submitKyc} loading={submitting} disabled={!gstin || !pan}>
+                <Button
+                  onClick={submitKyc}
+                  loading={submitting}
+                  disabled={!isGSTIN(gstin) || !isPAN(pan)}
+                >
                   Submit KYC <ChevronRight className="h-4 w-4" />
                 </Button>
               </div>
@@ -231,4 +250,14 @@ function Stepper({ current }: { current: Step }) {
 function extractError(e: unknown): string {
   if (typeof e === "object" && e && "message" in e) return String((e as { message: unknown }).message);
   return "Something went wrong";
+}
+
+// Indian GSTIN: 2-digit state code + 5 letters + 4 digits + 1 letter +
+// 1 digit/letter + Z + 1 digit/letter. 15 chars total.
+function isGSTIN(s: string): boolean {
+  return /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(s.trim().toUpperCase());
+}
+// PAN: 5 letters + 4 digits + 1 letter. 10 chars.
+function isPAN(s: string): boolean {
+  return /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(s.trim().toUpperCase());
 }

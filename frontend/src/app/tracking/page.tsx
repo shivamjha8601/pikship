@@ -13,12 +13,19 @@ export default function TrackingPage() {
 function Inner() {
   const [orders, setOrders] = React.useState<Order[]>([]);
   const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    ordersApi.list().then((r) => {
-      setOrders(r.orders.filter((o) => o.awb_number || ["booked", "in_transit"].includes(o.state)));
-      setLoading(false);
-    });
+    ordersApi.list()
+      .then((r) => {
+        const list = r.orders ?? [];
+        setOrders(list.filter((o) => o.awb_number || ["booked", "in_transit"].includes(o.state)));
+        setLoading(false);
+      })
+      .catch((e) => {
+        setError((e as { message?: string }).message || "Failed to load");
+        setLoading(false);
+      });
   }, []);
 
   return (
@@ -32,6 +39,11 @@ function Inner() {
         <CardBody className="p-0">
           {loading ? (
             <div className="px-5 py-12 text-center text-sm text-muted">Loading…</div>
+          ) : error ? (
+            <div className="px-5 py-12 text-center">
+              <p className="text-sm font-medium text-danger">{error}</p>
+              <p className="mt-1 text-xs text-muted">Refresh to retry.</p>
+            </div>
           ) : orders.length === 0 ? (
             <div className="px-5 py-16 text-center">
               <p className="text-sm font-medium">No active shipments yet.</p>

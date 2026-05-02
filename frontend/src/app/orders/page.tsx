@@ -17,11 +17,17 @@ export default function OrdersPage() {
 function Inner() {
   const [orders, setOrders] = React.useState<Order[]>([]);
   const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
   const [q, setQ] = React.useState("");
   const [state, setState] = React.useState<string>("");
 
   React.useEffect(() => {
-    ordersApi.list().then(r => { setOrders(r.orders); setLoading(false); });
+    ordersApi.list()
+      .then(r => { setOrders(r.orders ?? []); setLoading(false); })
+      .catch(e => {
+        setError((e as { message?: string }).message || "Failed to load orders");
+        setLoading(false);
+      });
   }, []);
 
   const filtered = orders.filter(o => {
@@ -75,6 +81,11 @@ function Inner() {
         <CardBody className="p-0">
           {loading ? (
             <div className="px-5 py-12 text-center text-sm text-muted">Loading…</div>
+          ) : error ? (
+            <div className="px-5 py-12 text-center">
+              <p className="text-sm font-medium text-danger">{error}</p>
+              <p className="mt-1 text-xs text-muted">Refresh to retry.</p>
+            </div>
           ) : filtered.length === 0 ? (
             <div className="px-5 py-16 text-center">
               <p className="text-sm font-medium">No orders match your filter.</p>
@@ -83,6 +94,7 @@ function Inner() {
               </p>
             </div>
           ) : (
+            <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="border-b border-border bg-bg/50 text-xs uppercase tracking-wider text-muted">
                 <tr>
@@ -119,6 +131,7 @@ function Inner() {
                 ))}
               </tbody>
             </table>
+            </div>
           )}
         </CardBody>
       </Card>

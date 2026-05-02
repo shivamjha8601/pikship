@@ -6,7 +6,6 @@ import { Card, CardBody, CardHeader, CardTitle, CardDescription, CardFooter } fr
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { sellers, paiseToRupees, type Seller, type Contract, type Usage } from "@/lib/api";
-import { useSession } from "@/lib/session";
 import { Building2, Check, Sparkles } from "lucide-react";
 
 export default function EnterprisePage() {
@@ -14,7 +13,6 @@ export default function EnterprisePage() {
 }
 
 function Inner() {
-  const { user } = useSession();
   const router = useRouter();
   const [seller, setSeller] = React.useState<Seller | null>(null);
   const [contract, setContract] = React.useState<Contract | null>(null);
@@ -72,7 +70,6 @@ function Inner() {
               {!isEnterprise && (
                 <UpgradeButton
                   sellerID={seller?.id || ""}
-                  userId={user?.id || ""}
                   onUpgraded={() => load()}
                   onError={setError}
                 />
@@ -126,9 +123,10 @@ function Inner() {
   );
 }
 
-function UpgradeButton({ sellerID, userId, onUpgraded, onError }: {
-  sellerID: string; userId: string;
-  onUpgraded: () => void; onError: (msg: string) => void;
+function UpgradeButton({ sellerID, onUpgraded, onError }: {
+  sellerID: string;
+  onUpgraded: () => void;
+  onError: (msg: string) => void;
 }) {
   const [busy, setBusy] = React.useState(false);
 
@@ -155,7 +153,6 @@ function UpgradeButton({ sellerID, userId, onUpgraded, onError }: {
       onError((e as { message?: string }).message || "Upgrade failed");
     } finally {
       setBusy(false);
-      void userId;
     }
   }
 
@@ -178,17 +175,17 @@ function ContractTerms({ contract }: { contract: Contract }) {
             <span className="font-medium text-text">{prettyValue(k, v)}</span>
           </li>
         ))}
-        {(contract.terms?.sla_delivered_p95_days as number | undefined) && (
+        {typeof contract.terms?.sla_delivered_p95_days === "number" && (
           <li className="flex justify-between gap-4 border-b border-border pb-2">
             <span className="text-muted">Delivered P95 SLA</span>
-            <span className="font-medium">{contract.terms?.sla_delivered_p95_days as number} days</span>
+            <span className="font-medium">{contract.terms.sla_delivered_p95_days} days</span>
           </li>
         )}
-        {(contract.terms?.monthly_minimum_paise as number | undefined) && (
+        {typeof contract.terms?.monthly_minimum_paise === "number" && (
           <li className="flex justify-between gap-4 border-b border-border pb-2">
             <span className="text-muted">Monthly minimum</span>
             <span className="font-medium">
-              {paiseToRupees(contract.terms?.monthly_minimum_paise as number)}
+              {paiseToRupees(contract.terms.monthly_minimum_paise)}
             </span>
           </li>
         )}

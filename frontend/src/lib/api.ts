@@ -58,6 +58,12 @@ async function request<T>(
       const e = (parsed as { error?: unknown }).error;
       if (typeof e === "string" && e) errMessage = e;
     }
+    // 401 from an authenticated call → token is dead. Clear it and notify
+    // the session provider so it can route the user to /login.
+    if (res.status === 401 && opts.auth !== false && typeof window !== "undefined") {
+      setToken(null);
+      window.dispatchEvent(new CustomEvent("pikshipp:unauthorized"));
+    }
     const err: ApiError = { status: res.status, message: errMessage, body: parsed };
     throw err;
   }

@@ -37,13 +37,18 @@ function Inner() {
   ]);
 
   React.useEffect(() => {
-    catalogApi.listPickups().then((p) => {
-      const list = p || [];
-      setPickups(list);
-      const def = list.find((x) => x.is_default) || list[0];
-      if (def) setPickupID(def.id);
-      setLoading(false);
-    });
+    catalogApi.listPickups()
+      .then((p) => {
+        const list = p || [];
+        setPickups(list);
+        const def = list.find((x) => x.is_default) || list[0];
+        if (def) setPickupID(def.id);
+        setLoading(false);
+      })
+      .catch((e) => {
+        setError((e as { message?: string }).message || "Failed to load pickup locations");
+        setLoading(false);
+      });
   }, []);
 
   const subtotal = lines.reduce((s, l) => s + l.price * l.quantity * 100, 0);
@@ -59,22 +64,26 @@ function Inner() {
     setLines((cur) => cur.filter((_, idx) => idx !== i));
   }
 
+  // Stable channel_order_id for retries — without this, two rapid submits
+  // produce different "WEB-<timestamp>" keys and bypass backend idempotency.
+  const fallbackChannelOrderID = React.useRef(`WEB-${Date.now()}`);
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (submitting) return; // belt-and-suspenders against double-submit
     setError(null);
     setSubmitting(true);
     try {
+      const ship = { line1: shipLine1, city: shipCity, state: shipState, country: "IN", pincode: shipPincode };
       const order = await ordersApi.create({
         channel,
-        channel_order_id: channelOrderID || `WEB-${Date.now()}`,
+        channel_order_id: channelOrderID || fallbackChannelOrderID.current,
+        order_ref: "",
         buyer_name: buyerName,
         buyer_phone: buyerPhone,
-        billing_address: {
-          line1: shipLine1, city: shipCity, state: shipState, country: "IN", pincode: shipPincode,
-        },
-        shipping_address: {
-          line1: shipLine1, city: shipCity, state: shipState, country: "IN", pincode: shipPincode,
-        },
+        buyer_email: "",
+        billing_address: ship,
+        shipping_address: ship,
         shipping_pincode: shipPincode,
         shipping_state: shipState,
         payment_method: paymentMethod,
@@ -89,15 +98,19 @@ function Inner() {
         package_length_mm: 200,
         package_width_mm: 150,
         package_height_mm: 100,
+        notes: "",
+        tags: [],
         lines: lines.map((l, i) => ({
           line_no: i + 1,
           sku: l.sku || `LINE-${i + 1}`,
-          name: l.name || l.sku,
+          name: l.name || l.sku || `Line ${i + 1}`,
           quantity: l.quantity,
-          unit_price_paise: l.price * 100,
+          unit_price_paise: Math.round(l.price * 100),
           unit_weight_g: l.weight,
+          hsn_code: "",
+          category_hint: "",
         })),
-      } as any);
+      });
       router.replace(`/orders/${order.id}`);
     } catch (e) {
       const errObj = e as { message?: string; status?: number };

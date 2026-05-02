@@ -83,6 +83,7 @@ function Inner() {
         <Card className="lg:col-span-2">
           <CardHeader><CardTitle>Items</CardTitle></CardHeader>
           <CardBody className="p-0">
+            <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="border-b border-border bg-bg/50 text-xs uppercase tracking-wider text-muted">
                 <tr>
@@ -110,6 +111,7 @@ function Inner() {
                 <tr><td colSpan={4} className="px-5 py-2 text-right font-semibold">Total</td><td className="px-5 py-2 text-right font-semibold">{paiseToRupees(order.total_paise)}</td></tr>
               </tfoot>
             </table>
+            </div>
           </CardBody>
         </Card>
 

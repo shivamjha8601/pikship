@@ -50,6 +50,18 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
   React.useEffect(() => { refresh(); }, [refresh]);
 
+  // Listen for the global 401 signal from the API client. If a request comes
+  // back unauthorized, the api client clears the token and dispatches this
+  // event — we react by resetting state and routing to /login.
+  React.useEffect(() => {
+    const handler = () => {
+      setState({ user: null, sellers: [], hasSeller: false, loading: false });
+      router.push("/login");
+    };
+    window.addEventListener("pikshipp:unauthorized", handler);
+    return () => window.removeEventListener("pikshipp:unauthorized", handler);
+  }, [router]);
+
   const login = React.useCallback(async (email: string, name: string) => {
     const res = await auth.devLogin(email, name);
     setToken(res.token);
