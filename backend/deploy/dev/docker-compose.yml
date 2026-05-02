@@ -1,0 +1,22 @@
+# Local-dev compose for a fresh checkout. Pikshipp normally uses the
+# `postgres-db` container that is already running on this host (port 5432);
+# this file is only used by `make dev-up` for engineers without it.
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: pikshipp-postgres
+    environment:
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: root
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    command: >
+      postgres
+      -c shared_preload_libraries=pg_stat_statements
+      -c log_min_duration_statement=100
+
+volumes:
+  postgres_data:

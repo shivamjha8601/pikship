@@ -1,0 +1,36 @@
+run:
+  timeout: 5m
+  go: '1.22'
+
+linters:
+  enable:
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - typecheck
+    - unused
+    - bodyclose
+    - sqlclosecheck
+    - revive
+    - nilerr
+    - rowserrcheck
+    - misspell
+    - unconvert
+
+linters-settings:
+  revive:
+    rules:
+      - name: blank-imports
+      - name: context-as-argument
+      - name: dot-imports
+      - name: error-return
+      - name: error-naming
+      - name: var-naming
+
+issues:
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - errcheck

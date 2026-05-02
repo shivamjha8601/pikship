@@ -1,0 +1,55 @@
+version: "2"
+sql:
+  - engine: "postgresql"
+    queries: "query/"
+    schema: "migrations/"
+    gen:
+      go:
+        package: "db"
+        sql_package: "pgx/v5"
+        out: "internal/db"
+        emit_interface: true
+        emit_json_tags: false
+        emit_pointers_for_null_types: true
+        emit_db_tags: false
+        emit_prepared_queries: false
+        emit_exact_table_names: false
+        emit_empty_slices: true
+        emit_methods_with_db_argument: true
+        overrides:
+          - go_type:
+              import: "github.com/google/uuid"
+              package: "uuid"
+              type: "UUID"
+            db_type: "uuid"
+            nullable: false
+          - go_type:
+              import: "github.com/vishal1132/pikshipp/backend/internal/core"
+              package: "core"
+              type: "Paise"
+            db_type: "bigint"
+            column: "*.amount_minor"
+          - go_type:
+              import: "github.com/vishal1132/pikshipp/backend/internal/core"
+              package: "core"
+              type: "Paise"
+            db_type: "bigint"
+            column: "*.balance_minor"
+          - go_type:
+              import: "github.com/vishal1132/pikshipp/backend/internal/core"
+              package: "core"
+              type: "Paise"
+            db_type: "bigint"
+            column: "*.hold_total_minor"
+          - go_type:
+              import: "github.com/vishal1132/pikshipp/backend/internal/core"
+              package: "core"
+              type: "Paise"
+            db_type: "bigint"
+            column: "*.credit_limit_minor"
+          - go_type:
+              import: "github.com/vishal1132/pikshipp/backend/internal/core"
+              package: "core"
+              type: "Paise"
+            db_type: "bigint"
+            column: "*.grace_negative_amount_minor"
