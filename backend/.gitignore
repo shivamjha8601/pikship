@@ -1,0 +1,13 @@
+/.env
+/.env.*
+!/.env.example
+/bin/
+/dist/
+/coverage.out
+/coverage.html
+/*.bench
+/.idea/
+/.vscode/
+*.exe
+*.test
+*.out
