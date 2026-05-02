@@ -1,0 +1,367 @@
+openapi: "3.0.3"
+info:
+  title: Pikshipp API
+  description: Multi-courier shipping aggregator for India
+  version: "0.1.0"
+  contact:
+    name: Pikshipp Engineering
+    email: engineering@pikshipp.com
+
+servers:
+  - url: https://api.pikshipp.com/v1
+    description: Production
+  - url: http://localhost:8081/v1
+    description: Development
+
+security:
+  - bearerAuth: []
+  - cookieAuth: []
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: pikshipp_session
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error: { type: string }
+
+    Paise:
+      type: integer
+      format: int64
+      description: Monetary amount in paise (1 INR = 100 paise)
+
+    Address:
+      type: object
+      properties:
+        line1: { type: string }
+        line2: { type: string }
+        city: { type: string }
+        state: { type: string }
+        country: { type: string, default: "IN" }
+        pincode: { type: string, pattern: "^[1-9][0-9]{5}$" }
+
+    User:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        name: { type: string }
+        status: { type: string, enum: [active, locked, wound_down] }
+        kind: { type: string }
+        created_at: { type: string, format: date-time }
+
+    SellerMembership:
+      type: object
+      properties:
+        user_id: { type: string, format: uuid }
+        seller_id: { type: string, format: uuid }
+        roles: { type: array, items: { type: string } }
+        status: { type: string }
+
+    Order:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        seller_id: { type: string, format: uuid }
+        state: { type: string }
+        channel: { type: string }
+        channel_order_id: { type: string }
+        buyer_name: { type: string }
+        buyer_phone: { type: string }
+        total_paise: { $ref: "#/components/schemas/Paise" }
+        payment_method: { type: string, enum: [prepaid, cod] }
+        shipping_address: { $ref: "#/components/schemas/Address" }
+        created_at: { type: string, format: date-time }
+
+    Shipment:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        order_id: { type: string, format: uuid }
+        state: { type: string }
+        carrier_code: { type: string }
+        service_type: { type: string }
+        awb: { type: string }
+        charges_paise: { $ref: "#/components/schemas/Paise" }
+        booked_at: { type: string, format: date-time }
+
+    WalletBalance:
+      type: object
+      properties:
+        balance: { $ref: "#/components/schemas/Paise" }
+        hold_total: { $ref: "#/components/schemas/Paise" }
+        available: { $ref: "#/components/schemas/Paise" }
+        credit_limit: { $ref: "#/components/schemas/Paise" }
+
+    TrackingEvent:
+      type: object
+      properties:
+        carrier_code: { type: string }
+        awb: { type: string }
+        raw_status: { type: string }
+        canonical_status: { type: string }
+        location: { type: string }
+        occurred_at: { type: string, format: date-time }
+        source: { type: string, enum: [webhook, poll, manual] }
+
+paths:
+  /me:
+    get:
+      summary: Get current user profile and seller memberships
+      tags: [Identity]
+      responses:
+        "200":
+          description: User profile
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user: { $ref: "#/components/schemas/User" }
+                  sellers:
+                    type: array
+                    items: { $ref: "#/components/schemas/SellerMembership" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /auth/select-seller:
+    post:
+      summary: Select active seller for the session
+      tags: [Identity]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [seller_id]
+              properties:
+                seller_id: { type: string, format: uuid }
+      responses:
+        "200":
+          description: New token with seller scoped
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token: { type: string }
+                  expires_at: { type: string, format: date-time }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /auth/logout:
+    post:
+      summary: Revoke current session
+      tags: [Identity]
+      responses:
+        "200": { description: OK }
+
+  /seller:
+    get:
+      summary: Get seller profile
+      tags: [Seller]
+      responses:
+        "200": { description: Seller record }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /seller/kyc:
+    get:
+      summary: Get KYC application
+      tags: [Seller]
+      responses:
+        "200": { description: KYC application }
+    post:
+      summary: Submit KYC application
+      tags: [Seller]
+      responses:
+        "200": { description: Submitted }
+
+  /pickup-locations:
+    get:
+      summary: List pickup locations
+      tags: [Catalog]
+      responses:
+        "200": { description: List of pickup locations }
+    post:
+      summary: Create a pickup location
+      tags: [Catalog]
+      responses:
+        "201": { description: Created }
+
+  /products:
+    get:
+      summary: List products
+      tags: [Catalog]
+      responses:
+        "200": { description: Product list }
+    put:
+      summary: Upsert a product by SKU
+      tags: [Catalog]
+      responses:
+        "200": { description: Upserted }
+
+  /orders:
+    get:
+      summary: List orders
+      tags: [Orders]
+      responses:
+        "200": { description: Orders list }
+    post:
+      summary: Create an order
+      tags: [Orders]
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Order" }
+
+  /orders/{orderID}:
+    get:
+      summary: Get order by ID
+      tags: [Orders]
+      parameters:
+        - name: orderID
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Order" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /orders/{orderID}/cancel:
+    post:
+      summary: Cancel an order
+      tags: [Orders]
+      parameters:
+        - name: orderID
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string }
+      responses:
+        "200": { description: Cancelled }
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+  /shipments/{shipmentID}:
+    get:
+      summary: Get shipment by ID
+      tags: [Shipments]
+      parameters:
+        - name: shipmentID
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Shipment" }
+
+  /shipments/{shipmentID}/tracking:
+    get:
+      summary: Get tracking events for a shipment
+      tags: [Tracking]
+      parameters:
+        - name: shipmentID
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/TrackingEvent" }
+
+  /wallet/balance:
+    get:
+      summary: Get wallet balance
+      tags: [Wallet]
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WalletBalance" }
+
+  /reports/shipments/summary:
+    get:
+      summary: Shipment summary report
+      tags: [Reports]
+      parameters:
+        - name: from
+          in: query
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        "200": { description: Summary aggregate }
+
+  /track/{token}:
+    get:
+      summary: Public tracking by token (buyer-facing, no auth)
+      tags: [Public]
+      security: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Tracking view }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /webhooks/carriers/{carrier}:
+    post:
+      summary: Carrier tracking webhook receiver
+      tags: [Webhooks]
+      security: []
+      parameters:
+        - name: carrier
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Acknowledged }
+        "401": { description: Invalid signature }
+
+  components:
+    responses:
+      Unauthorized:
+        description: Unauthenticated
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Error" }
+      Forbidden:
+        description: Insufficient permissions
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Error" }
+      NotFound:
+        description: Resource not found
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Error" }
+      BadRequest:
+        description: Bad request
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Error" }
