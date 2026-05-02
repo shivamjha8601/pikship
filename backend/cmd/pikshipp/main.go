@@ -18,6 +18,8 @@ import (
 	"time"
 
 	httpapi "github.com/vishal1132/pikshipp/backend/api/http"
+	"github.com/vishal1132/pikshipp/backend/api/http/handlers"
+	"github.com/vishal1132/pikshipp/backend/internal/adapters/googleoauth"
 	"github.com/vishal1132/pikshipp/backend/internal/audit"
 	"github.com/vishal1132/pikshipp/backend/internal/auth"
 	"github.com/vishal1132/pikshipp/backend/internal/buyerexp"
@@ -187,6 +189,27 @@ func run(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 	contractsSvc := contracts.New(poolAdmin, auditSvc, policyEngine)
 	limitsGuard := limits.New(poolReports, policyEngine)
 
+	// Google OAuth — only constructed if a client_id is configured.
+	// Client secret is read from the secrets store (key = google_oauth_client_secret).
+	var googleAdapter handlers.GoogleOAuthAdapter
+	if cfg.GoogleOAuthClientID != "" {
+		clientSecret, err := store.Get(ctx, "google_oauth_client_secret")
+		if err != nil {
+			return fmt.Errorf("google oauth: %w", err)
+		}
+		if cfg.GoogleOAuthRedirectURI == "" || cfg.GoogleOAuthFrontendReturnURL == "" {
+			return fmt.Errorf("google oauth: PIKSHIPP_GOOGLE_OAUTH_REDIRECT_URI and PIKSHIPP_GOOGLE_OAUTH_FRONTEND_RETURN_URL are required when CLIENT_ID is set")
+		}
+		googleAdapter = googleoauth.New(googleoauth.Config{
+			ClientID:     cfg.GoogleOAuthClientID,
+			ClientSecret: clientSecret,
+			RedirectURI:  cfg.GoogleOAuthRedirectURI,
+		})
+		log.InfoContext(ctx, "google oauth enabled",
+			slog.String("redirect_uri", cfg.GoogleOAuthRedirectURI),
+			slog.String("frontend_return_url", cfg.GoogleOAuthFrontendReturnURL))
+	}
+
 	// ── HTTP server ───────────────────────────────────────────────────────
 	var srv *http.Server
 	if cfg.Role == config.RoleAPI || cfg.Role == config.RoleAll {
@@ -206,9 +229,11 @@ func run(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 			NDR:       ndrSvc,
 			Reports:   reportsSvc,
 			Contracts: contractsSvc,
-			Limits:    limitsGuard,
-			AppPool:   poolApp,
-			DevMode:   cfg.DevMode,
+			Limits:            limitsGuard,
+			AppPool:           poolApp,
+			DevMode:           cfg.DevMode,
+			Google:            googleAdapter,
+			GoogleFrontendURL: cfg.GoogleOAuthFrontendReturnURL,
 		}, cfg.HealthcheckTimeout)
 
 		srv = &http.Server{

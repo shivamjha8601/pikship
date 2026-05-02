@@ -17,6 +17,10 @@ type OnboardingDeps struct {
 	Seller   seller.Service
 	Auth     auth.Authenticator
 	DevMode  bool // when true, exposes /v1/auth/dev-login (NEVER enable in prod)
+
+	// Google OAuth — when nil, /v1/auth/google/* return 503.
+	Google             GoogleOAuthAdapter
+	GoogleFrontendURL  string // browser is 302'd here on successful callback
 }
 
 // DevLoginHandler simulates a Google OAuth callback for local/test use.
@@ -151,8 +155,13 @@ func ProvisionSellerHandler(d OnboardingDeps) http.HandlerFunc {
 // /v1/auth/dev-login is mounted UNCONDITIONALLY here but the handler returns
 // 404 unless DevMode is true. That keeps the route table consistent across
 // builds while making the endpoint inert in prod.
+//
+// /v1/auth/google/{start,callback} are mounted regardless and short-circuit
+// to 503 when d.Google is nil.
 func MountOnboarding(r chi.Router, d OnboardingDeps) {
 	r.Post("/auth/dev-login", DevLoginHandler(d))
+	r.Get("/auth/google/start", GoogleStartHandler(d))
+	r.Get("/auth/google/callback", GoogleCallbackHandler(d))
 }
 
 // MountSellerProvisioning is mounted under /v1 (auth-required, NO seller scope).

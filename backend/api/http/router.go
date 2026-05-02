@@ -46,6 +46,10 @@ type AppDeps struct {
 	Limits    limits.Guard
 	AppPool   *pgxpool.Pool
 	DevMode   bool // exposes /v1/auth/dev-login when true
+
+	// Google OAuth — when Google is nil, /v1/auth/google/* return 503.
+	Google              handlers.GoogleOAuthAdapter
+	GoogleFrontendURL   string
 }
 
 // NewAppRouter builds the full chi router with all middleware and routes.
@@ -79,10 +83,12 @@ func NewAppRouter(deps AppDeps, requestTimeout time.Duration) chi.Router {
 
 	// /v1 routes — public onboarding first, then auth, then seller scope.
 	onboardingDeps := handlers.OnboardingDeps{
-		Identity: deps.Identity,
-		Seller:   deps.Seller,
-		Auth:     deps.Auth,
-		DevMode:  deps.DevMode,
+		Identity:          deps.Identity,
+		Seller:            deps.Seller,
+		Auth:              deps.Auth,
+		DevMode:           deps.DevMode,
+		Google:            deps.Google,
+		GoogleFrontendURL: deps.GoogleFrontendURL,
 	}
 	r.Route("/v1", func(r chi.Router) {
 		// Public (no auth)

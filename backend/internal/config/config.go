@@ -53,6 +53,12 @@ type Config struct {
 	// DevMode exposes /v1/auth/dev-login and similar test-only endpoints.
 	// MUST be false in production.
 	DevMode bool `env:"DEV_MODE" envDefault:"false"`
+
+	// Google OAuth — when ClientID is empty the /v1/auth/google/* routes
+	// return 503 (not configured) and the dev-login path stays the only way in.
+	GoogleOAuthClientID         string `env:"GOOGLE_OAUTH_CLIENT_ID"          envDefault:""`
+	GoogleOAuthRedirectURI      string `env:"GOOGLE_OAUTH_REDIRECT_URI"       envDefault:""`
+	GoogleOAuthFrontendReturnURL string `env:"GOOGLE_OAUTH_FRONTEND_RETURN_URL" envDefault:""`
 }
 
 // Load parses env vars into Config and validates them.
