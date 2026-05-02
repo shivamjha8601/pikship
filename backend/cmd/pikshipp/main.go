@@ -200,6 +200,7 @@ func run(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 			NDR:       ndrSvc,
 			Reports:   reportsSvc,
 			AppPool:   poolApp,
+			DevMode:   cfg.DevMode,
 		}, cfg.HealthcheckTimeout)
 
 		srv = &http.Server{

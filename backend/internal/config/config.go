@@ -49,6 +49,10 @@ type Config struct {
 
 	// Observability
 	HealthcheckTimeout time.Duration `env:"HEALTHCHECK_TIMEOUT" envDefault:"3s"`
+
+	// DevMode exposes /v1/auth/dev-login and similar test-only endpoints.
+	// MUST be false in production.
+	DevMode bool `env:"DEV_MODE" envDefault:"false"`
 }
 
 // Load parses env vars into Config and validates them.

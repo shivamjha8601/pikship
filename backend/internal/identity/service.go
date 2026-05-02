@@ -27,6 +27,11 @@ type Service interface {
 	// SelectSeller checks the user belongs to sellerID and returns the membership.
 	SelectSeller(ctx context.Context, userID core.UserID, sellerID core.SellerID) (SellerMembership, error)
 
+	// AddMember inserts (or upserts) a seller_user link, granting the user
+	// the listed roles for the seller. Used during seller provisioning to
+	// auto-add the founder as owner; also used by invite-accept flow.
+	AddMember(ctx context.Context, userID core.UserID, sellerID core.SellerID, roles []core.SellerRole) (SellerMembership, error)
+
 	// InviteUserToSeller creates a pending invite and returns it.
 	InviteUserToSeller(ctx context.Context, sellerID core.SellerID, byUser core.UserID, in InviteInput) (Invite, error)
 
@@ -66,20 +71,20 @@ type OAuthProfile struct {
 
 // User is the public view of app_user.
 type User struct {
-	ID        core.UserID
-	Email     string
-	Name      string
-	Status    string
-	Kind      string
-	CreatedAt time.Time
+	ID        core.UserID `json:"id"`
+	Email     string      `json:"email"`
+	Name      string      `json:"name"`
+	Status    string      `json:"status"`
+	Kind      string      `json:"kind"`
+	CreatedAt time.Time   `json:"created_at"`
 }
 
 // SellerMembership is a user's membership in a seller.
 type SellerMembership struct {
-	UserID   core.UserID
-	SellerID core.SellerID
-	Roles    []core.SellerRole
-	Status   string
+	UserID   core.UserID       `json:"user_id"`
+	SellerID core.SellerID     `json:"seller_id"`
+	Roles    []core.SellerRole `json:"roles"`
+	Status   string            `json:"status"`
 }
 
 // InviteInput carries the parameters for sending an invite.

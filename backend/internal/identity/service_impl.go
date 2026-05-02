@@ -74,6 +74,21 @@ func (s *serviceImpl) ListUserSellers(ctx context.Context, userID core.UserID) (
 	return s.repo.listUserSellers(ctx, userID)
 }
 
+func (s *serviceImpl) AddMember(ctx context.Context, userID core.UserID, sellerID core.SellerID, roles []core.SellerRole) (SellerMembership, error) {
+	if len(roles) == 0 {
+		return SellerMembership{}, fmt.Errorf("%w: roles required", core.ErrInvalidArgument)
+	}
+	if err := s.repo.upsertSellerUser(ctx, userID, sellerID, roles); err != nil {
+		return SellerMembership{}, fmt.Errorf("identity.AddMember: %w", err)
+	}
+	return SellerMembership{
+		UserID:   userID,
+		SellerID: sellerID,
+		Roles:    roles,
+		Status:   "active",
+	}, nil
+}
+
 func (s *serviceImpl) SelectSeller(ctx context.Context, userID core.UserID, sellerID core.SellerID) (SellerMembership, error) {
 	m, err := s.repo.getSellerMembership(ctx, userID, sellerID)
 	if err != nil {

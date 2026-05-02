@@ -56,34 +56,34 @@ const (
 
 // Seller is the public view of the seller table.
 type Seller struct {
-	ID              core.SellerID
-	LegalName       string
-	DisplayName     string
-	SellerType      core.SellerType
-	LifecycleState  LifecycleState
-	GSTIN           string
-	PAN             string
-	BillingEmail    string
-	SupportEmail    string
-	PrimaryPhone    string
-	SignupSource     string
-	FoundingUserID  core.UserID
-	SuspendedReason string
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
+	ID              core.SellerID    `json:"id"`
+	LegalName       string           `json:"legal_name"`
+	DisplayName     string           `json:"display_name"`
+	SellerType      core.SellerType  `json:"seller_type"`
+	LifecycleState  LifecycleState   `json:"lifecycle_state"`
+	GSTIN           string           `json:"gstin,omitempty"`
+	PAN             string           `json:"pan,omitempty"`
+	BillingEmail    string           `json:"billing_email"`
+	SupportEmail    string           `json:"support_email"`
+	PrimaryPhone    string           `json:"primary_phone"`
+	SignupSource    string           `json:"signup_source"`
+	FoundingUserID  core.UserID      `json:"founding_user_id"`
+	SuspendedReason string           `json:"suspended_reason,omitempty"`
+	CreatedAt       time.Time        `json:"created_at"`
+	UpdatedAt       time.Time        `json:"updated_at"`
 }
 
 // KYCApplication is the seller's KYC data.
 type KYCApplication struct {
-	SellerID       core.SellerID
-	State          string
-	LegalName      string
-	GSTIN          string
-	PAN            string
-	BusinessAddress core.Address
-	SubmittedAt    *time.Time
-	DecidedAt      *time.Time
-	DecisionReason string
+	SellerID        core.SellerID `json:"seller_id"`
+	State           string        `json:"state"`
+	LegalName       string        `json:"legal_name"`
+	GSTIN           string        `json:"gstin"`
+	PAN             string        `json:"pan"`
+	BusinessAddress core.Address  `json:"business_address"`
+	SubmittedAt     *time.Time    `json:"submitted_at,omitempty"`
+	DecidedAt       *time.Time    `json:"decided_at,omitempty"`
+	DecisionReason  string        `json:"decision_reason,omitempty"`
 }
 
 // ProvisionInput carries the data needed to create a new seller.

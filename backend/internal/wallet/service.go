@@ -41,13 +41,13 @@ type Service interface {
 
 // Balance is the current balance view.
 type Balance struct {
-	SellerID    core.SellerID
-	Balance     core.Paise // ledger balance (credits - debits)
-	HoldTotal   core.Paise // sum of active holds
-	Available   core.Paise // balance + credit_limit - hold_total
-	CreditLimit core.Paise
-	GraceAmount core.Paise
-	Status      string
+	SellerID    core.SellerID `json:"seller_id"`
+	Balance     core.Paise    `json:"balance"`
+	HoldTotal   core.Paise    `json:"hold_total"`
+	Available   core.Paise    `json:"available"`
+	CreditLimit core.Paise    `json:"credit_limit"`
+	GraceAmount core.Paise    `json:"grace_amount"`
+	Status      string        `json:"status"`
 }
 
 // Ref is an idempotency reference for a wallet operation.

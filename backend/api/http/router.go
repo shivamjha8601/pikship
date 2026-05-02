@@ -41,6 +41,7 @@ type AppDeps struct {
 	NDR       ndr.Service
 	Reports   reports.Service
 	AppPool   *pgxpool.Pool
+	DevMode   bool // exposes /v1/auth/dev-login when true
 }
 
 // NewAppRouter builds the full chi router with all middleware and routes.
@@ -72,36 +73,48 @@ func NewAppRouter(deps AppDeps, requestTimeout time.Duration) chi.Router {
 		Tracking: deps.Tracking,
 	})
 
-	// Authenticated API
+	// /v1 routes — public onboarding first, then auth, then seller scope.
+	onboardingDeps := handlers.OnboardingDeps{
+		Identity: deps.Identity,
+		Seller:   deps.Seller,
+		Auth:     deps.Auth,
+		DevMode:  deps.DevMode,
+	}
 	r.Route("/v1", func(r chi.Router) {
-		r.Use(auth.Middleware(deps.Auth, deps.Log))
+		// Public (no auth)
+		handlers.MountOnboarding(r, onboardingDeps)
 
-		// Identity (no seller scope needed)
-		handlers.MountIdentity(r, handlers.IdentityDeps{
-			Identity: deps.Identity,
-			Auth:     deps.Auth,
-		})
-
-		// Seller-scoped routes
+		// Authenticated
 		r.Group(func(r chi.Router) {
-			r.Use(SellerScope)
-			r.Use(idempotency.Middleware(deps.AppPool))
+			r.Use(auth.Middleware(deps.Auth, deps.Log))
 
-			handlers.MountSeller(r, handlers.SellerDeps{Seller: deps.Seller})
-			handlers.MountCatalog(r, handlers.CatalogDeps{
-				Pickup:  deps.Pickup,
-				Product: deps.Product,
+			handlers.MountIdentity(r, handlers.IdentityDeps{
+				Identity: deps.Identity,
+				Auth:     deps.Auth,
 			})
-			handlers.MountOrders(r, handlers.OrdersDeps{Orders: deps.Orders})
-			handlers.MountShipments(r, handlers.ShipmentDeps{
-				Shipments: deps.Shipments,
-				Wallet:    deps.Wallet,
-				Reports:   deps.Reports,
-			})
-			handlers.MountTracking(r, handlers.TrackingDeps{
-				Tracking: deps.Tracking,
-				BuyerExp: deps.BuyerExp,
-				NDR:      deps.NDR,
+			handlers.MountSellerProvisioning(r, onboardingDeps)
+
+			// Seller-scoped routes
+			r.Group(func(r chi.Router) {
+				r.Use(SellerScope)
+				r.Use(idempotency.Middleware(deps.AppPool))
+
+				handlers.MountSeller(r, handlers.SellerDeps{Seller: deps.Seller})
+				handlers.MountCatalog(r, handlers.CatalogDeps{
+					Pickup:  deps.Pickup,
+					Product: deps.Product,
+				})
+				handlers.MountOrders(r, handlers.OrdersDeps{Orders: deps.Orders})
+				handlers.MountShipments(r, handlers.ShipmentDeps{
+					Shipments: deps.Shipments,
+					Wallet:    deps.Wallet,
+					Reports:   deps.Reports,
+				})
+				handlers.MountTracking(r, handlers.TrackingDeps{
+					Tracking: deps.Tracking,
+					BuyerExp: deps.BuyerExp,
+					NDR:      deps.NDR,
+				})
 			})
 		})
 	})

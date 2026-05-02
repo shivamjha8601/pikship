@@ -66,81 +66,81 @@ func CanTransition(from, to OrderState) bool {
 
 // Order is the full order record.
 type Order struct {
-	ID               core.OrderID
-	SellerID         core.SellerID
-	State            OrderState
-	Channel          string
-	ChannelOrderID   string
-	OrderRef         string
-	BuyerName        string
-	BuyerPhone       string
-	BuyerEmail       string
-	BillingAddress   core.Address
-	ShippingAddress  core.Address
-	ShippingPincode  core.Pincode
-	ShippingState    string
-	PaymentMethod    core.PaymentMode
-	SubtotalPaise    core.Paise
-	ShippingPaise    core.Paise
-	DiscountPaise    core.Paise
-	TaxPaise         core.Paise
-	TotalPaise       core.Paise
-	CODAmountPaise   core.Paise
-	PickupLocationID core.PickupLocationID
-	PackageWeightG   int
-	PackageLengthMM  int
-	PackageWidthMM   int
-	PackageHeightMM  int
-	AWBNumber        string
-	CarrierCode      string
-	BookedAt         *time.Time
-	Notes            string
-	Tags             []string
-	Lines            []OrderLine
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
+	ID               core.OrderID          `json:"id"`
+	SellerID         core.SellerID         `json:"seller_id"`
+	State            OrderState            `json:"state"`
+	Channel          string                `json:"channel"`
+	ChannelOrderID   string                `json:"channel_order_id"`
+	OrderRef         string                `json:"order_ref,omitempty"`
+	BuyerName        string                `json:"buyer_name"`
+	BuyerPhone       string                `json:"buyer_phone"`
+	BuyerEmail       string                `json:"buyer_email,omitempty"`
+	BillingAddress   core.Address          `json:"billing_address"`
+	ShippingAddress  core.Address          `json:"shipping_address"`
+	ShippingPincode  core.Pincode          `json:"shipping_pincode"`
+	ShippingState    string                `json:"shipping_state"`
+	PaymentMethod    core.PaymentMode      `json:"payment_method"`
+	SubtotalPaise    core.Paise            `json:"subtotal_paise"`
+	ShippingPaise    core.Paise            `json:"shipping_paise"`
+	DiscountPaise    core.Paise            `json:"discount_paise"`
+	TaxPaise         core.Paise            `json:"tax_paise"`
+	TotalPaise       core.Paise            `json:"total_paise"`
+	CODAmountPaise   core.Paise            `json:"cod_amount_paise"`
+	PickupLocationID core.PickupLocationID `json:"pickup_location_id"`
+	PackageWeightG   int                   `json:"package_weight_g"`
+	PackageLengthMM  int                   `json:"package_length_mm"`
+	PackageWidthMM   int                   `json:"package_width_mm"`
+	PackageHeightMM  int                   `json:"package_height_mm"`
+	AWBNumber        string                `json:"awb_number,omitempty"`
+	CarrierCode      string                `json:"carrier_code,omitempty"`
+	BookedAt         *time.Time            `json:"booked_at,omitempty"`
+	Notes            string                `json:"notes,omitempty"`
+	Tags             []string              `json:"tags,omitempty"`
+	Lines            []OrderLine           `json:"lines"`
+	CreatedAt        time.Time             `json:"created_at"`
+	UpdatedAt        time.Time             `json:"updated_at"`
 }
 
 // OrderLine is one line in an order.
 type OrderLine struct {
-	LineNo         int
-	SKU            string
-	Name           string
-	Quantity       int
-	UnitPricePaise core.Paise
-	UnitWeightG    int
-	HSNCode        string
-	CategoryHint   string
+	LineNo         int        `json:"line_no"`
+	SKU            string     `json:"sku"`
+	Name           string     `json:"name"`
+	Quantity       int        `json:"quantity"`
+	UnitPricePaise core.Paise `json:"unit_price_paise"`
+	UnitWeightG    int        `json:"unit_weight_g"`
+	HSNCode        string     `json:"hsn_code,omitempty"`
+	CategoryHint   string     `json:"category_hint,omitempty"`
 }
 
 // CreateRequest carries data for a new order.
 type CreateRequest struct {
-	SellerID         core.SellerID
-	Channel          string
-	ChannelOrderID   string
-	OrderRef         string
-	BuyerName        string
-	BuyerPhone       string
-	BuyerEmail       string
-	BillingAddress   core.Address
-	ShippingAddress  core.Address
-	ShippingPincode  core.Pincode
-	ShippingState    string
-	PaymentMethod    core.PaymentMode
-	SubtotalPaise    core.Paise
-	ShippingPaise    core.Paise
-	DiscountPaise    core.Paise
-	TaxPaise         core.Paise
-	TotalPaise       core.Paise
-	CODAmountPaise   core.Paise
-	PickupLocationID core.PickupLocationID
-	PackageWeightG   int
-	PackageLengthMM  int
-	PackageWidthMM   int
-	PackageHeightMM  int
-	Notes            string
-	Tags             []string
-	Lines            []OrderLine
+	SellerID         core.SellerID         `json:"seller_id,omitempty"`
+	Channel          string                `json:"channel"`
+	ChannelOrderID   string                `json:"channel_order_id"`
+	OrderRef         string                `json:"order_ref,omitempty"`
+	BuyerName        string                `json:"buyer_name"`
+	BuyerPhone       string                `json:"buyer_phone"`
+	BuyerEmail       string                `json:"buyer_email,omitempty"`
+	BillingAddress   core.Address          `json:"billing_address"`
+	ShippingAddress  core.Address          `json:"shipping_address"`
+	ShippingPincode  core.Pincode          `json:"shipping_pincode"`
+	ShippingState    string                `json:"shipping_state"`
+	PaymentMethod    core.PaymentMode      `json:"payment_method"`
+	SubtotalPaise    core.Paise            `json:"subtotal_paise"`
+	ShippingPaise    core.Paise            `json:"shipping_paise"`
+	DiscountPaise    core.Paise            `json:"discount_paise"`
+	TaxPaise         core.Paise            `json:"tax_paise"`
+	TotalPaise       core.Paise            `json:"total_paise"`
+	CODAmountPaise   core.Paise            `json:"cod_amount_paise"`
+	PickupLocationID core.PickupLocationID `json:"pickup_location_id"`
+	PackageWeightG   int                   `json:"package_weight_g"`
+	PackageLengthMM  int                   `json:"package_length_mm"`
+	PackageWidthMM   int                   `json:"package_width_mm"`
+	PackageHeightMM  int                   `json:"package_height_mm"`
+	Notes            string                `json:"notes,omitempty"`
+	Tags             []string              `json:"tags,omitempty"`
+	Lines            []OrderLine           `json:"lines"`
 }
 
 // UpdatePatch has optional fields for partial updates.
@@ -172,6 +172,6 @@ type ListQuery struct {
 
 // ListResult is a page of orders.
 type ListResult struct {
-	Orders []Order
-	Total  int
+	Orders []Order `json:"orders"`
+	Total  int     `json:"total"`
 }

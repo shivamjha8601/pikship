@@ -4,6 +4,7 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 
 	"github.com/vishal1132/pikshipp/backend/internal/core"
@@ -29,6 +30,13 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 		code, msg = http.StatusForbidden, err.Error()
 	case errors.Is(err, core.ErrUnavailable):
 		code, msg = http.StatusServiceUnavailable, err.Error()
+	}
+	if code >= 500 {
+		slog.ErrorContext(r.Context(), "handler error",
+			slog.String("path", r.URL.Path),
+			slog.String("method", r.Method),
+			slog.String("err", err.Error()),
+		)
 	}
 	writeJSON(w, code, map[string]string{"error": msg})
 }
