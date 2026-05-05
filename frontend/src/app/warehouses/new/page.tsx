@@ -5,6 +5,8 @@ import { Shell } from "@/components/Shell";
 import { Card, CardBody, CardHeader, CardTitle, CardDescription } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Field, Input } from "@/components/ui/Input";
+import { PhoneInput, isValidIndianMobile } from "@/components/ui/PhoneInput";
+import { PincodeInput } from "@/components/ui/PincodeInput";
 import { catalogApi } from "@/lib/api";
 import { ChevronRight } from "lucide-react";
 
@@ -109,20 +111,22 @@ function Inner() {
           <Field label="Address line 2" hint="Optional">
             <Input value={line2} onChange={(e) => setLine2(e.target.value)} />
           </Field>
+          <Field label="Pincode">
+            <PincodeInput
+              value={pincode}
+              onChange={setPincode}
+              onResolve={({ city: c, state: s }) => {
+                if (!city) setCity(c);
+                if (!state) setState(s);
+              }}
+              required
+            />
+          </Field>
           <Field label="City">
             <Input required value={city} onChange={(e) => setCity(e.target.value)} />
           </Field>
           <Field label="State">
             <Input required value={state} onChange={(e) => setState(e.target.value)} />
-          </Field>
-          <Field label="Pincode" hint="6 digits">
-            <Input
-              required
-              pattern="[1-9][0-9]{5}"
-              placeholder="560001"
-              value={pincode}
-              onChange={(e) => setPincode(e.target.value)}
-            />
           </Field>
         </CardBody>
       </Card>
@@ -138,13 +142,11 @@ function Inner() {
           <Field label="Contact name">
             <Input required value={contactName} onChange={(e) => setContactName(e.target.value)} />
           </Field>
-          <Field label="Contact phone">
-            <Input
-              required
-              placeholder="+919999999999"
-              value={contactPhone}
-              onChange={(e) => setContactPhone(e.target.value)}
-            />
+          <Field
+            label="Contact phone"
+            error={contactPhone !== "+91" && !isValidIndianMobile(contactPhone) ? "10 digits, starts with 6/7/8/9" : undefined}
+          >
+            <PhoneInput value={contactPhone} onChange={setContactPhone} required />
           </Field>
           <Field label="Contact email" hint="Optional">
             <Input
@@ -166,7 +168,19 @@ function Inner() {
             <Button type="button" variant="ghost" onClick={() => router.back()}>
               Cancel
             </Button>
-            <Button type="submit" loading={submitting}>
+            <Button
+              type="submit"
+              loading={submitting}
+              disabled={
+                !label.trim() ||
+                !contactName.trim() ||
+                !isValidIndianMobile(contactPhone) ||
+                !line1.trim() ||
+                !city.trim() ||
+                !state.trim() ||
+                !/^[1-9]\d{5}$/.test(pincode)
+              }
+            >
               Save and continue <ChevronRight className="h-4 w-4" />
             </Button>
           </div>

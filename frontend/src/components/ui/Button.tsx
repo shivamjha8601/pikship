@@ -1,5 +1,6 @@
 "use client";
 import * as React from "react";
+import Link, { type LinkProps } from "next/link";
 import { cn } from "@/lib/cn";
 
 type Variant = "primary" | "secondary" | "ghost" | "danger";
@@ -22,6 +23,19 @@ const sizes: Record<Size, string> = {
   lg: "h-12 px-6 text-base",
 };
 
+const baseClasses =
+  "inline-flex items-center justify-center gap-2 rounded-md font-medium " +
+  "transition-colors focus-visible:outline focus-visible:outline-2 " +
+  "focus-visible:outline-accent disabled:pointer-events-none";
+
+export function buttonClasses({
+  variant = "primary",
+  size = "md",
+  className,
+}: { variant?: Variant; size?: Size; className?: string } = {}): string {
+  return cn(baseClasses, variants[variant], sizes[size], className);
+}
+
 export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: Variant;
@@ -35,13 +49,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       <button
         ref={ref}
         disabled={disabled || loading}
-        className={cn(
-          "inline-flex items-center justify-center gap-2 rounded-md font-medium",
-          "transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent",
-          variants[variant],
-          sizes[size],
-          className,
-        )}
+        className={buttonClasses({ variant, size, className })}
         {...props}
       >
         {loading && (
@@ -53,3 +61,29 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   },
 );
 Button.displayName = "Button";
+
+// LinkButton renders a Next <Link> with button styling. Use this anywhere
+// you'd otherwise write <Link><Button>...</Button></Link> — that pattern
+// nests a <button> inside an <a> which is invalid HTML and breaks
+// keyboard / right-click "Open in new tab" semantics.
+export interface LinkButtonProps
+  extends Omit<LinkProps, "as">,
+    Pick<React.AnchorHTMLAttributes<HTMLAnchorElement>, "className" | "target" | "rel" | "aria-label"> {
+  variant?: Variant;
+  size?: Size;
+  children: React.ReactNode;
+}
+
+export function LinkButton({
+  variant = "primary",
+  size = "md",
+  className,
+  children,
+  ...props
+}: LinkButtonProps) {
+  return (
+    <Link className={buttonClasses({ variant, size, className })} {...props}>
+      {children}
+    </Link>
+  );
+}

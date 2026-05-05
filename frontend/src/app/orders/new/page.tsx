@@ -5,6 +5,8 @@ import { Shell } from "@/components/Shell";
 import { Card, CardBody, CardHeader, CardTitle, CardDescription } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Field, Input } from "@/components/ui/Input";
+import { PhoneInput, isValidIndianMobile } from "@/components/ui/PhoneInput";
+import { PincodeInput } from "@/components/ui/PincodeInput";
 import { catalogApi, ordersApi, type PickupLocation } from "@/lib/api";
 import { MapPin, Plus, Trash2 } from "lucide-react";
 
@@ -53,6 +55,17 @@ function Inner() {
 
   const subtotal = lines.reduce((s, l) => s + l.price * l.quantity * 100, 0);
   const totalWeight = lines.reduce((s, l) => s + l.weight * l.quantity, 0);
+
+  const canSubmit =
+    buyerName.trim() !== "" &&
+    isValidIndianMobile(buyerPhone) &&
+    pickupID !== "" &&
+    shipLine1.trim() !== "" &&
+    shipCity.trim() !== "" &&
+    shipState.trim() !== "" &&
+    /^[1-9]\d{5}$/.test(shipPincode) &&
+    lines.length > 0 &&
+    lines.every((l) => l.quantity >= 1 && l.weight >= 1);
 
   function setLine(i: number, patch: Partial<Line>) {
     setLines((cur) => cur.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
@@ -162,8 +175,15 @@ function Inner() {
           <CardTitle>Buyer</CardTitle>
         </CardHeader>
         <CardBody className="grid gap-4 sm:grid-cols-2">
-          <Field label="Name"><Input required value={buyerName} onChange={(e) => setBuyerName(e.target.value)} /></Field>
-          <Field label="Phone"><Input required value={buyerPhone} onChange={(e) => setBuyerPhone(e.target.value)} /></Field>
+          <Field label="Name">
+            <Input required value={buyerName} onChange={(e) => setBuyerName(e.target.value)} />
+          </Field>
+          <Field
+            label="Phone"
+            error={buyerPhone !== "+91" && !isValidIndianMobile(buyerPhone) ? "10 digits, starts with 6/7/8/9" : undefined}
+          >
+            <PhoneInput value={buyerPhone} onChange={setBuyerPhone} required />
+          </Field>
         </CardBody>
       </Card>
 
@@ -172,13 +192,25 @@ function Inner() {
           <CardTitle>Shipping address</CardTitle>
         </CardHeader>
         <CardBody className="grid gap-4 sm:grid-cols-2">
+          <Field label="Pincode">
+            <PincodeInput
+              value={shipPincode}
+              onChange={setShipPincode}
+              onResolve={({ city, state }) => {
+                if (!shipCity) setShipCity(city);
+                if (!shipState) setShipState(state);
+              }}
+              required
+            />
+          </Field>
           <Field label="Address line 1" hint="Street, locality">
             <Input required value={shipLine1} onChange={(e) => setShipLine1(e.target.value)} />
           </Field>
-          <Field label="City"><Input required value={shipCity} onChange={(e) => setShipCity(e.target.value)} /></Field>
-          <Field label="State"><Input required value={shipState} onChange={(e) => setShipState(e.target.value)} /></Field>
-          <Field label="Pincode" hint="6 digits">
-            <Input required pattern="[1-9][0-9]{5}" value={shipPincode} onChange={(e) => setShipPincode(e.target.value)} />
+          <Field label="City">
+            <Input required value={shipCity} onChange={(e) => setShipCity(e.target.value)} />
+          </Field>
+          <Field label="State">
+            <Input required value={shipState} onChange={(e) => setShipState(e.target.value)} />
           </Field>
         </CardBody>
       </Card>
@@ -299,7 +331,7 @@ function Inner() {
           </div>
           <div className="flex items-center gap-2">
             {error && <span className="text-sm text-danger">{error}</span>}
-            <Button type="submit" loading={submitting}>Create order</Button>
+            <Button type="submit" loading={submitting} disabled={!canSubmit}>Create order</Button>
           </div>
         </CardBody>
       </Card>

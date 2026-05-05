@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { Card, CardBody, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Field, Input } from "@/components/ui/Input";
+import { PhoneInput, isValidIndianMobile } from "@/components/ui/PhoneInput";
 import { useSession } from "@/lib/session";
 import { sellers } from "@/lib/api";
 import { Check, ChevronRight, Truck } from "lucide-react";
@@ -113,12 +114,11 @@ export default function OnboardingPage() {
                     onChange={(e) => setDisplayName(e.target.value)}
                   />
                 </Field>
-                <Field label="Primary phone">
-                  <Input
-                    placeholder="+919999999999"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                  />
+                <Field
+                  label="Primary phone"
+                  error={phone !== "+91" && !isValidIndianMobile(phone) ? "Enter a 10-digit mobile starting with 6, 7, 8, or 9" : undefined}
+                >
+                  <PhoneInput value={phone} onChange={setPhone} required />
                 </Field>
                 <Field label="Billing email">
                   <Input
@@ -137,7 +137,7 @@ export default function OnboardingPage() {
                 <Button
                   onClick={provisionSeller}
                   loading={submitting}
-                  disabled={!legalName || !phone}
+                  disabled={!legalName.trim() || !isValidIndianMobile(phone) || !billingEmail.trim()}
                 >
                   Continue <ChevronRight className="h-4 w-4" />
                 </Button>

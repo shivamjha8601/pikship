@@ -8,6 +8,7 @@ import { useSession } from "@/lib/session";
 import { Truck } from "lucide-react";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8081";
+const SHOW_DEV_LOGIN = process.env.NEXT_PUBLIC_DEV_MODE === "true";
 
 const GOOGLE_OAUTH_ERRORS: Record<string, string> = {
   state_mismatch: "Sign-in expired. Please try again.",
@@ -123,32 +124,36 @@ export default function LoginPage() {
                   <GoogleLogo />
                   Continue with Google
                 </button>
-                <div className="flex items-center gap-3 text-xs uppercase tracking-wide text-muted">
-                  <div className="h-px flex-1 bg-border" />
-                  <span>or dev login</span>
-                  <div className="h-px flex-1 bg-border" />
-                </div>
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <Field label="Email" hint="We'll create your account if it doesn't exist">
-                    <Input
-                      type="email"
-                      placeholder="founder@yourbrand.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      required
-                    />
-                  </Field>
-                  <Field label="Your name">
-                    <Input
-                      placeholder="Riya Sharma"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                    />
-                  </Field>
-                  <Button type="submit" loading={submitting} className="w-full" variant="secondary">
-                    Continue with email (dev)
-                  </Button>
-                </form>
+                {SHOW_DEV_LOGIN && (
+                  <>
+                    <div className="flex items-center gap-3 text-xs uppercase tracking-wide text-muted">
+                      <div className="h-px flex-1 bg-border" />
+                      <span>or dev login</span>
+                      <div className="h-px flex-1 bg-border" />
+                    </div>
+                    <form onSubmit={handleSubmit} className="space-y-4">
+                      <Field label="Email" hint="We'll create your account if it doesn't exist">
+                        <Input
+                          type="email"
+                          placeholder="founder@yourbrand.com"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          required
+                        />
+                      </Field>
+                      <Field label="Your name">
+                        <Input
+                          placeholder="Riya Sharma"
+                          value={name}
+                          onChange={(e) => setName(e.target.value)}
+                        />
+                      </Field>
+                      <Button type="submit" loading={submitting} className="w-full" variant="secondary">
+                        Continue with email
+                      </Button>
+                    </form>
+                  </>
+                )}
               </div>
             </CardBody>
           </Card>

@@ -3,8 +3,7 @@ import * as React from "react";
 import Link from "next/link";
 import { Shell } from "@/components/Shell";
 import { Card, CardBody } from "@/components/ui/Card";
-import { Button } from "@/components/ui/Button";
-import { Badge } from "@/components/ui/Badge";
+import { LinkButton } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { ordersApi, paiseToRupees, type Order } from "@/lib/api";
 import { OrderStateBadge } from "@/components/OrderStateBadge";
@@ -50,9 +49,7 @@ function Inner() {
           <h1 className="text-2xl font-semibold">Orders</h1>
           <p className="mt-1 text-sm text-muted">{orders.length.toLocaleString()} total</p>
         </div>
-        <Link href="/orders/new">
-          <Button><Plus className="h-4 w-4" /> Create order</Button>
-        </Link>
+        <LinkButton href="/orders/new"><Plus className="h-4 w-4" /> Create order</LinkButton>
       </header>
 
       <Card>

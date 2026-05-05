@@ -3,7 +3,7 @@ import * as React from "react";
 import Link from "next/link";
 import { Shell } from "@/components/Shell";
 import { Card, CardBody, CardHeader, CardTitle, CardDescription } from "@/components/ui/Card";
-import { Button } from "@/components/ui/Button";
+import { LinkButton } from "@/components/ui/Button";
 import { ordersApi, sellers, walletApi, paiseToRupees, type Order, type Usage, type WalletBalance, type Seller } from "@/lib/api";
 import { OrderStateBadge } from "@/components/OrderStateBadge";
 import { Package, TrendingUp, AlertTriangle, Wallet as WalletIcon } from "lucide-react";
@@ -52,8 +52,8 @@ function Inner() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Link href="/orders/new"><Button>Create order</Button></Link>
-          <Link href="/orders"><Button variant="secondary">View all orders</Button></Link>
+          <LinkButton href="/orders/new">Create order</LinkButton>
+          <LinkButton href="/orders" variant="secondary">View all orders</LinkButton>
         </div>
       </header>
 
@@ -144,9 +144,9 @@ function Inner() {
                   count={usage.shipments_this_month}
                   limit={usage.shipment_month_limit}
                 />
-                <Link href="/enterprise" className="block">
-                  <Button variant="secondary" className="w-full">View contract</Button>
-                </Link>
+                <LinkButton href="/enterprise" variant="secondary" className="w-full">
+                  View contract
+                </LinkButton>
               </div>
             ) : (
               <Empty message="Capacity unavailable" />
