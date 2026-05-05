@@ -36,10 +36,24 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     }
     try {
       const res = await auth.me();
+      const sellers = res.sellers || [];
+      // If the user has memberships but the current token isn't bound to a
+      // seller, bind it to the first one — otherwise every seller-scoped
+      // endpoint 403s with seller_not_selected. Login + Google OAuth both
+      // mint tokens with no seller; this is the catch.
+      if (sellers.length > 0 && !res.active_seller_id) {
+        try {
+          const selected = await auth.selectSeller(sellers[0].seller_id);
+          setToken(selected.token);
+        } catch {
+          // Tolerate — we still have a valid (un-scoped) session and the
+          // user can land on /onboarding or /login without crashing.
+        }
+      }
       setState({
         user: res.user,
-        sellers: res.sellers || [],
-        hasSeller: !!(res.sellers && res.sellers.length > 0),
+        sellers,
+        hasSeller: sellers.length > 0,
         loading: false,
       });
     } catch {

@@ -235,7 +235,7 @@ export const auth = {
       "/v1/auth/dev-login",
       { email, name },
     ),
-  me: () => api.get<{ user: User; sellers: SellerMembership[] | null }>("/v1/me"),
+  me: () => api.get<{ user: User; sellers: SellerMembership[] | null; active_seller_id: string }>("/v1/me"),
   logout: () => api.post<{ status: string }>("/v1/auth/logout"),
   selectSeller: (sellerId: string) =>
     api.post<{ token: string; expires_at: string; membership: SellerMembership }>(

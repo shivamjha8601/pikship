@@ -17,6 +17,10 @@ type IdentityDeps struct {
 }
 
 // MeHandler returns the current user's profile.
+//
+// active_seller_id is the seller bound to the current session token (empty
+// string if none). The frontend uses this to know whether it needs to call
+// /v1/auth/select-seller before hitting any seller-scoped endpoint.
 func MeHandler(d IdentityDeps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		p := auth.MustPrincipalFrom(r.Context())
@@ -26,9 +30,14 @@ func MeHandler(d IdentityDeps) http.HandlerFunc {
 			return
 		}
 		sellers, _ := d.Identity.ListUserSellers(r.Context(), p.UserID)
+		var activeSellerID string
+		if !p.SellerID.IsZero() {
+			activeSellerID = p.SellerID.String()
+		}
 		writeJSON(w, http.StatusOK, map[string]any{
-			"user":    user,
-			"sellers": sellers,
+			"user":             user,
+			"sellers":          sellers,
+			"active_seller_id": activeSellerID,
 		})
 	}
 }
