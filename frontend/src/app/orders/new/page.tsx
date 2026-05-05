@@ -6,7 +6,7 @@ import { Card, CardBody, CardHeader, CardTitle, CardDescription } from "@/compon
 import { Button } from "@/components/ui/Button";
 import { Field, Input } from "@/components/ui/Input";
 import { catalogApi, ordersApi, type PickupLocation } from "@/lib/api";
-import { Plus, Trash2 } from "lucide-react";
+import { MapPin, Plus, Trash2 } from "lucide-react";
 
 type Line = { sku: string; name: string; quantity: number; price: number; weight: number };
 
@@ -130,9 +130,21 @@ function Inner() {
   if (pickups.length === 0) {
     return (
       <Card>
-        <CardBody className="text-center py-12">
-          <p className="text-sm font-medium">You need a pickup location first.</p>
-          <p className="mt-1 text-xs text-muted">Create a warehouse before booking your first order.</p>
+        <CardBody className="mx-auto max-w-md py-12 text-center">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-accent/10">
+            <MapPin className="h-6 w-6 text-accent" />
+          </div>
+          <h2 className="text-lg font-semibold">Where do we pick this up?</h2>
+          <p className="mt-2 text-sm text-muted">
+            Before we can book this order, we need an address where the courier will collect
+            your shipment. This is usually your home, shop, or wherever your stock lives.
+          </p>
+          <Button
+            className="mt-6"
+            onClick={() => router.push("/warehouses/new?next=/orders/new")}
+          >
+            Add pickup address <Plus className="h-4 w-4" />
+          </Button>
         </CardBody>
       </Card>
     );
