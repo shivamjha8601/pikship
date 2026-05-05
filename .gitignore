@@ -4,6 +4,7 @@
 .env
 .env.*
 !.env.example
+!frontend/.env.production
 
 # User-supplied artefacts that landed in the repo root.
 *.pdf
