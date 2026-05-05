@@ -30,3 +30,9 @@ html, body {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgb(var(--border)); border-radius: 8px; }
 ::-webkit-scrollbar-thumb:hover { background: rgb(var(--muted) / 0.4); }
+
+/* Number inputs without the native +/- spinners — they look cluttered next
+   to currency/weight fields and steal a few px of horizontal space. */
+.no-spin::-webkit-outer-spin-button,
+.no-spin::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.no-spin { appearance: textfield; -moz-appearance: textfield; }

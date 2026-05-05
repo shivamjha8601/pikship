@@ -7,10 +7,18 @@ import { Button } from "@/components/ui/Button";
 import { Field, Input } from "@/components/ui/Input";
 import { PhoneInput, isValidIndianMobile } from "@/components/ui/PhoneInput";
 import { PincodeInput } from "@/components/ui/PincodeInput";
-import { catalogApi, ordersApi, type PickupLocation } from "@/lib/api";
-import { MapPin, Plus, Trash2 } from "lucide-react";
+import { catalogApi, ordersApi, paiseToRupees, type PickupLocation } from "@/lib/api";
+import { MapPin, Package as PackageIcon, Plus, Trash2 } from "lucide-react";
 
 type Line = { sku: string; name: string; quantity: number; price: number; weight: number };
+
+// Dimension presets — chips below the L×W×H inputs. cm.
+const PACKAGE_PRESETS = [
+  { label: "Envelope",  l: 25, w: 18, h: 2  },
+  { label: "Small box", l: 20, w: 15, h: 10 },
+  { label: "Medium",    l: 30, w: 20, h: 15 },
+  { label: "Large",     l: 40, w: 30, h: 25 },
+];
 
 export default function NewOrderPage() {
   return <Shell><Inner /></Shell>;
@@ -37,6 +45,13 @@ function Inner() {
   const [lines, setLines] = React.useState<Line[]>([
     { sku: "", name: "", quantity: 1, price: 0, weight: 100 },
   ]);
+
+  // Package dimensions in cm (most Indian sellers think in cm). Converted
+  // to mm on submit because the backend stores mm. Defaults match what was
+  // hardcoded earlier — a small parcel.
+  const [packageL, setPackageL] = React.useState(20);
+  const [packageW, setPackageW] = React.useState(15);
+  const [packageH, setPackageH] = React.useState(10);
 
   React.useEffect(() => {
     catalogApi.listPickups()
@@ -65,7 +80,8 @@ function Inner() {
     shipState.trim() !== "" &&
     /^[1-9]\d{5}$/.test(shipPincode) &&
     lines.length > 0 &&
-    lines.every((l) => l.quantity >= 1 && l.weight >= 1);
+    lines.every((l) => l.quantity >= 1 && l.weight >= 1) &&
+    packageL >= 1 && packageW >= 1 && packageH >= 1;
 
   function setLine(i: number, patch: Partial<Line>) {
     setLines((cur) => cur.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
@@ -108,9 +124,9 @@ function Inner() {
         cod_amount_paise: paymentMethod === "cod" ? subtotal : 0,
         pickup_location_id: pickupID,
         package_weight_g: Math.max(100, totalWeight),
-        package_length_mm: 200,
-        package_width_mm: 150,
-        package_height_mm: 100,
+        package_length_mm: packageL * 10,
+        package_width_mm: packageW * 10,
+        package_height_mm: packageH * 10,
         notes: "",
         tags: [],
         lines: lines.map((l, i) => ({
@@ -264,74 +280,204 @@ function Inner() {
       <Card>
         <CardHeader>
           <CardTitle>Items</CardTitle>
+          <CardDescription>What's inside the package. Weight is per item, in grams.</CardDescription>
         </CardHeader>
         <CardBody className="space-y-3">
-          {lines.map((l, i) => (
-            <div key={i} className="grid grid-cols-12 gap-2">
-              <Input
-                placeholder="SKU"
-                className="col-span-2"
-                value={l.sku}
-                onChange={(e) => setLine(i, { sku: e.target.value })}
-              />
-              <Input
-                placeholder="Name"
-                className="col-span-4"
-                value={l.name}
-                onChange={(e) => setLine(i, { name: e.target.value })}
-              />
-              <Input
-                type="number"
-                placeholder="Qty"
-                min={1}
-                className="col-span-2"
-                value={l.quantity}
-                onChange={(e) => setLine(i, { quantity: Number(e.target.value) })}
-              />
-              <Input
-                type="number"
-                placeholder="Price ₹"
-                min={0}
-                className="col-span-2"
-                value={l.price}
-                onChange={(e) => setLine(i, { price: Number(e.target.value) })}
-              />
-              <Input
-                type="number"
-                placeholder="Weight g"
-                min={0}
-                className="col-span-1"
-                value={l.weight}
-                onChange={(e) => setLine(i, { weight: Number(e.target.value) })}
-              />
-              <Button
-                type="button"
-                variant="ghost"
-                size="md"
-                className="col-span-1"
-                onClick={() => removeLine(i)}
-                disabled={lines.length === 1}
+          {lines.map((l, i) => {
+            const lineSubtotal = l.price * l.quantity;
+            return (
+              <div
+                key={i}
+                className="rounded-lg border border-border bg-bg/30 p-4 transition-colors hover:bg-bg/60"
               >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </div>
-          ))}
+                <div className="mb-3 flex items-center justify-between">
+                  <span className="text-xs font-medium uppercase tracking-wider text-muted">
+                    Item {i + 1}
+                  </span>
+                  {lines.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeLine(i)}
+                      aria-label={`Remove item ${i + 1}`}
+                      className="rounded-md p-1 text-muted hover:bg-danger/10 hover:text-danger"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Field label="SKU" hint="Optional — auto-generated if blank">
+                    <Input
+                      placeholder="TSHIRT-RED-M"
+                      value={l.sku}
+                      onChange={(e) => setLine(i, { sku: e.target.value })}
+                    />
+                  </Field>
+                  <Field label="Product name">
+                    <Input
+                      placeholder="Cotton t-shirt"
+                      value={l.name}
+                      onChange={(e) => setLine(i, { name: e.target.value })}
+                    />
+                  </Field>
+                </div>
+
+                <div className="mt-3 grid gap-3 grid-cols-3">
+                  <Field label="Quantity">
+                    <Input
+                      type="number"
+                      inputMode="numeric"
+                      className="no-spin"
+                      min={1}
+                      value={l.quantity}
+                      onChange={(e) => setLine(i, { quantity: Math.max(1, Number(e.target.value) || 0) })}
+                    />
+                  </Field>
+                  <Field label="Unit price (₹)">
+                    <Input
+                      type="number"
+                      inputMode="decimal"
+                      className="no-spin"
+                      min={0}
+                      step="0.01"
+                      value={l.price}
+                      onChange={(e) => setLine(i, { price: Math.max(0, Number(e.target.value) || 0) })}
+                    />
+                  </Field>
+                  <Field label="Unit weight (g)">
+                    <Input
+                      type="number"
+                      inputMode="numeric"
+                      className="no-spin"
+                      min={1}
+                      value={l.weight}
+                      onChange={(e) => setLine(i, { weight: Math.max(1, Number(e.target.value) || 0) })}
+                    />
+                  </Field>
+                </div>
+
+                <div className="mt-3 flex items-center justify-end gap-2 text-xs text-muted">
+                  Line total
+                  <span className="font-medium text-text">
+                    {paiseToRupees(Math.round(lineSubtotal * 100))}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
           <Button type="button" variant="ghost" onClick={addLine}>
-            <Plus className="h-4 w-4" /> Add item
+            <Plus className="h-4 w-4" /> Add another item
           </Button>
         </CardBody>
       </Card>
 
       <Card>
-        <CardBody className="flex items-center justify-between">
-          <div className="text-sm text-muted">
-            Subtotal: <span className="font-medium text-text">₹{(subtotal / 100).toFixed(2)}</span>
-            {" · "}
-            Weight: <span className="font-medium text-text">{totalWeight}g</span>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <PackageIcon className="h-4 w-4 text-muted" />
+            Package
+          </CardTitle>
+          <CardDescription>
+            Outer dimensions of the box you'll hand to the courier. Pick a preset or
+            enter your own — couriers price by both weight and volume.
+          </CardDescription>
+        </CardHeader>
+        <CardBody className="space-y-4">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Field label="Length (cm)">
+              <Input
+                type="number"
+                inputMode="numeric"
+                className="no-spin"
+                min={1}
+                value={packageL}
+                onChange={(e) => setPackageL(Math.max(0, Number(e.target.value) || 0))}
+              />
+            </Field>
+            <Field label="Width (cm)">
+              <Input
+                type="number"
+                inputMode="numeric"
+                className="no-spin"
+                min={1}
+                value={packageW}
+                onChange={(e) => setPackageW(Math.max(0, Number(e.target.value) || 0))}
+              />
+            </Field>
+            <Field label="Height (cm)">
+              <Input
+                type="number"
+                inputMode="numeric"
+                className="no-spin"
+                min={1}
+                value={packageH}
+                onChange={(e) => setPackageH(Math.max(0, Number(e.target.value) || 0))}
+              />
+            </Field>
           </div>
-          <div className="flex items-center gap-2">
-            {error && <span className="text-sm text-danger">{error}</span>}
-            <Button type="submit" loading={submitting} disabled={!canSubmit}>Create order</Button>
+
+          <div className="flex flex-wrap gap-2">
+            {PACKAGE_PRESETS.map((p) => {
+              const active = packageL === p.l && packageW === p.w && packageH === p.h;
+              return (
+                <button
+                  type="button"
+                  key={p.label}
+                  onClick={() => { setPackageL(p.l); setPackageW(p.w); setPackageH(p.h); }}
+                  className={
+                    "rounded-full border px-3 py-1 text-xs transition-colors " +
+                    (active
+                      ? "border-accent bg-accent/10 text-accent"
+                      : "border-border bg-surface text-muted hover:bg-bg")
+                  }
+                >
+                  {p.label}
+                  <span className="ml-1 text-muted/70">{p.l}×{p.w}×{p.h}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex items-center justify-between rounded-md border border-dashed border-border bg-bg/30 px-4 py-2 text-sm">
+            <div>
+              <div className="font-medium">Total weight</div>
+              <div className="text-xs text-muted">Auto from item weight × quantity</div>
+            </div>
+            <div className="text-base font-semibold tabular-nums">
+              {totalWeight.toLocaleString("en-IN")} g
+              {totalWeight >= 1000 && (
+                <span className="ml-1 text-xs font-normal text-muted">
+                  ({(totalWeight / 1000).toFixed(2)} kg)
+                </span>
+              )}
+            </div>
+          </div>
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardBody className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="text-sm text-muted">
+            <div>
+              Items subtotal{" "}
+              <span className="font-medium text-text">{paiseToRupees(subtotal)}</span>
+            </div>
+            <div className="mt-0.5 text-xs">
+              {paymentMethod === "cod"
+                ? `${paiseToRupees(subtotal)} to collect from buyer (COD)`
+                : "Prepaid — no collection at delivery"}
+            </div>
+          </div>
+          <div className="flex flex-col items-end gap-1 sm:items-end">
+            {error && (
+              <div className="rounded-md border border-danger/20 bg-danger/5 px-3 py-1.5 text-xs text-danger">
+                {error}
+              </div>
+            )}
+            <Button type="submit" loading={submitting} disabled={!canSubmit}>
+              Create order
+            </Button>
           </div>
         </CardBody>
       </Card>
