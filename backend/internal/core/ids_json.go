@@ -29,6 +29,8 @@ func (id ProductID) MarshalJSON() ([]byte, error)            { return uuidMarsha
 func (id *ProductID) UnmarshalJSON(b []byte) error           { return uuidUnmarshalJSON(b, (*uuid.UUID)(id)) }
 func (id BuyerID) MarshalJSON() ([]byte, error)              { return uuidMarshalJSON(uuid.UUID(id)) }
 func (id *BuyerID) UnmarshalJSON(b []byte) error             { return uuidUnmarshalJSON(b, (*uuid.UUID)(id)) }
+func (id BuyerAddressID) MarshalJSON() ([]byte, error)       { return uuidMarshalJSON(uuid.UUID(id)) }
+func (id *BuyerAddressID) UnmarshalJSON(b []byte) error      { return uuidUnmarshalJSON(b, (*uuid.UUID)(id)) }
 func (id AuditEventID) MarshalJSON() ([]byte, error)         { return uuidMarshalJSON(uuid.UUID(id)) }
 func (id *AuditEventID) UnmarshalJSON(b []byte) error        { return uuidUnmarshalJSON(b, (*uuid.UUID)(id)) }
 func (id HoldID) MarshalJSON() ([]byte, error)               { return uuidMarshalJSON(uuid.UUID(id)) }
