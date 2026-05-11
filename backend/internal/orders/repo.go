@@ -54,7 +54,8 @@ const (
                tax_paise, total_paise, cod_amount_paise,
                pickup_location_id, package_weight_g, package_length_mm,
                package_width_mm, package_height_mm,
-               COALESCE(awb_number,''), COALESCE(carrier_code,''), booked_at,
+               COALESCE(awb_number,''), COALESCE(carrier_code,''),
+               booked_at, shipped_at, out_for_delivery_at, delivered_at, cancelled_at,
                COALESCE(notes,''), COALESCE(tags,'{}'), created_at, updated_at
         FROM order_record WHERE id = $1 AND seller_id = $2
     `
@@ -66,7 +67,8 @@ const (
                tax_paise, total_paise, cod_amount_paise,
                pickup_location_id, package_weight_g, package_length_mm,
                package_width_mm, package_height_mm,
-               COALESCE(awb_number,''), COALESCE(carrier_code,''), booked_at,
+               COALESCE(awb_number,''), COALESCE(carrier_code,''),
+               booked_at, shipped_at, out_for_delivery_at, delivered_at, cancelled_at,
                COALESCE(notes,''), COALESCE(tags,'{}'), created_at, updated_at
         FROM order_record WHERE seller_id = $1 AND channel = $2 AND channel_order_id = $3
     `
@@ -167,7 +169,8 @@ func scanOrder(row pgx.Row) (Order, error) {
 		&billingJSON, &shippingJSON, &pincode, &shippingState,
 		&paymentMethod, &sub, &ship, &disc, &tax, &total, &cod,
 		&pickupID, &weightG, &lenMM, &widMM, &heiMM,
-		&o.AWBNumber, &o.CarrierCode, &o.BookedAt,
+		&o.AWBNumber, &o.CarrierCode,
+		&o.BookedAt, &o.ShippedAt, &o.OutForDeliveryAt, &o.DeliveredAt, &o.CancelledAt,
 		&o.Notes, &tags, &o.CreatedAt, &o.UpdatedAt,
 	); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -214,12 +217,30 @@ func getLines(ctx context.Context, q querier, orderID core.OrderID) ([]OrderLine
 
 // transitionState performs a same-tx state change + state event insert.
 // Caller must already have validated the source state under FOR UPDATE.
+// Side effect: stamps shipped_at / out_for_delivery_at / delivered_at on the
+// matching state milestones so downstream surfaces (notifications, reports,
+// the UI's "delivered 2h ago") don't have to derive timestamps from
+// tracking_event.
 func transitionState(ctx context.Context, q querier, sellerID core.SellerID, id core.OrderID, from, to OrderState, reason string) error {
 	if !CanTransition(from, to) {
 		return fmt.Errorf("%w: %s→%s not allowed", core.ErrInvalidArgument, from, to)
 	}
-	if _, err := q.Exec(ctx, updateStateSQL, id.UUID(), string(to), sellerID.UUID()); err != nil {
-		return fmt.Errorf("orders.transitionState: %w", err)
+	stampCol := ""
+	switch to {
+	case StateInTransit:
+		stampCol = "shipped_at"
+	case StateDelivered:
+		stampCol = "delivered_at"
+	}
+	if stampCol != "" {
+		sql := fmt.Sprintf(`UPDATE order_record SET state = $2, %s = COALESCE(%s, now()), updated_at = now() WHERE id = $1 AND seller_id = $3`, stampCol, stampCol)
+		if _, err := q.Exec(ctx, sql, id.UUID(), string(to), sellerID.UUID()); err != nil {
+			return fmt.Errorf("orders.transitionState: %w", err)
+		}
+	} else {
+		if _, err := q.Exec(ctx, updateStateSQL, id.UUID(), string(to), sellerID.UUID()); err != nil {
+			return fmt.Errorf("orders.transitionState: %w", err)
+		}
 	}
 	if _, err := q.Exec(ctx, insertStateEventSQL, id.UUID(), sellerID.UUID(), string(from), string(to), reason); err != nil {
 		return fmt.Errorf("orders.transitionState event: %w", err)

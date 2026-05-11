@@ -205,6 +205,10 @@ export type Order = {
   awb_number?: string;
   carrier_code?: string;
   booked_at?: string;
+  shipped_at?: string;
+  out_for_delivery_at?: string;
+  delivered_at?: string;
+  cancelled_at?: string;
   notes?: string;
   tags?: string[];
   lines: OrderLine[];
@@ -321,17 +325,24 @@ export const ordersApi = {
 };
 
 export type Shipment = {
-  ID: string;
-  OrderID: string;
-  SellerID: string;
-  State: string;
-  CarrierCode: string;
-  ServiceType: string;
-  AWB: string;
-  CarrierShipmentID: string;
-  ChargesPaise: number;
-  CODAmountPaise: number;
-  BookedAt: string | null;
+  id: string;
+  order_id: string;
+  seller_id: string;
+  state: string;
+  carrier_code: string;
+  service_type: string;
+  awb: string;
+  carrier_shipment_id: string;
+  charges_paise: number;
+  cod_amount_paise: number;
+  pickup_location_id?: string;
+  pickup_address?: Address;
+  drop_address?: Address;
+  drop_pincode?: string;
+  booked_at?: string | null;
+  shipped_at?: string | null;
+  delivered_at?: string | null;
+  cancelled_at?: string | null;
 };
 
 export type TrackingEvent = {

@@ -62,42 +62,49 @@ const (
 	StateFailed         ShipmentState = "failed"
 )
 
-// Shipment is the full shipment record.
+// Shipment is the full shipment record. JSON tags follow the rest of the API
+// (snake_case) — previously this struct went through Go's default field-name
+// marshaling and emitted PascalCase keys, which forced every frontend caller
+// to special-case it.
 type Shipment struct {
-	ID                    core.ShipmentID
-	SellerID              core.SellerID
-	OrderID               core.OrderID
-	AllocationDecisionID  core.AllocationDecisionID
-	State                 ShipmentState
-	CarrierCode           string
-	ServiceType           core.ServiceType
-	AWB                   string
-	CarrierShipmentID     string
-	EstimatedDeliveryAt   *time.Time
-	BookedAt              *time.Time
-	ChargesPaise          core.Paise
-	CODAmountPaise        core.Paise
-	PickupLocationID      core.PickupLocationID
-	PickupAddress         core.Address
-	DropAddress           core.Address
-	DropPincode           core.Pincode
-	PackageWeightG        int
-	PackageLengthMM       int
-	PackageWidthMM        int
-	PackageHeightMM       int
-	LastCarrierError      string
-	AttemptCount          int
-	CreatedAt             time.Time
-	UpdatedAt             time.Time
+	ID                   core.ShipmentID           `json:"id"`
+	SellerID             core.SellerID             `json:"seller_id"`
+	OrderID              core.OrderID              `json:"order_id"`
+	AllocationDecisionID core.AllocationDecisionID `json:"allocation_decision_id"`
+	State                ShipmentState             `json:"state"`
+	CarrierCode          string                    `json:"carrier_code"`
+	ServiceType          core.ServiceType          `json:"service_type"`
+	AWB                  string                    `json:"awb"`
+	CarrierShipmentID    string                    `json:"carrier_shipment_id"`
+	EstimatedDeliveryAt  *time.Time                `json:"estimated_delivery_at,omitempty"`
+	BookedAt             *time.Time                `json:"booked_at,omitempty"`
+	ShippedAt            *time.Time                `json:"shipped_at,omitempty"`
+	DeliveredAt          *time.Time                `json:"delivered_at,omitempty"`
+	CancelledAt          *time.Time                `json:"cancelled_at,omitempty"`
+	ChargesPaise         core.Paise                `json:"charges_paise"`
+	CODAmountPaise       core.Paise                `json:"cod_amount_paise"`
+	PickupLocationID     core.PickupLocationID     `json:"pickup_location_id"`
+	PickupAddress        core.Address              `json:"pickup_address"`
+	DropAddress          core.Address              `json:"drop_address"`
+	DropPincode          core.Pincode              `json:"drop_pincode"`
+	PackageWeightG       int                       `json:"package_weight_g"`
+	PackageLengthMM      int                       `json:"package_length_mm"`
+	PackageWidthMM       int                       `json:"package_width_mm"`
+	PackageHeightMM      int                       `json:"package_height_mm"`
+	LastCarrierError     string                    `json:"last_carrier_error,omitempty"`
+	AttemptCount         int                       `json:"attempt_count"`
+	CreatedAt            time.Time                 `json:"created_at"`
+	UpdatedAt            time.Time                 `json:"updated_at"`
 }
 
 // BookRequest carries all the data needed to book a shipment.
 type BookRequest struct {
-	SellerID        core.SellerID
-	OrderID         core.OrderID
-	Decision        allocation.Decision
-	PickupAddress   core.Address
-	PickupContact   core.ContactInfo
+	SellerID         core.SellerID
+	OrderID          core.OrderID
+	PickupLocationID core.PickupLocationID
+	Decision         allocation.Decision
+	PickupAddress    core.Address
+	PickupContact    core.ContactInfo
 	DropAddress     core.Address
 	DropContact     core.ContactInfo
 	DropPincode     core.Pincode

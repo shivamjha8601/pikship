@@ -49,7 +49,7 @@ function Inner() {
         const sh = await ordersApi.shipment(order.id);
         if (cancelled) return;
         setShipment(sh);
-        const evs = (await shipmentsApi.listEvents(sh.ID)) || [];
+        const evs = (await shipmentsApi.listEvents(sh.id)) || [];
         if (cancelled) return;
         setEvents(evs);
       } catch {
@@ -71,7 +71,7 @@ function Inner() {
       setShipment(ship);
       loadOrder();
       // Auto-pull initial tracking events.
-      const evs = (await shipmentsApi.refresh(ship.ID)) || [];
+      const evs = (await shipmentsApi.refresh(ship.id)) || [];
       setEvents(evs);
     } catch (e) {
       setBookErr((e as { message?: string }).message || "Failed to book");
@@ -85,7 +85,7 @@ function Inner() {
     setRefreshing(true);
     setTrackErr(null);
     try {
-      const evs = (await shipmentsApi.refresh(shipment.ID)) || [];
+      const evs = (await shipmentsApi.refresh(shipment.id)) || [];
       setEvents(evs);
       // The poll may have advanced the order state via shipment transitions;
       // re-load so the header badge + CTAs reflect the new state.
@@ -248,7 +248,7 @@ function Inner() {
                 Tracking
               </CardTitle>
               <p className="mt-1 text-xs text-muted">
-                AWB <span className="font-mono">{shipment?.AWB || order.awb_number}</span> · refresh to pull latest from the carrier
+                AWB <span className="font-mono">{shipment?.awb || order.awb_number}</span> · refresh to pull latest from the carrier
               </p>
             </div>
             <Button size="sm" variant="secondary" onClick={refreshTracking} loading={refreshing}>

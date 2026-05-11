@@ -77,7 +77,7 @@ const (
 	getShipmentSQL = `
         SELECT id, seller_id, order_id, allocation_decision_id, state,
                carrier_code, service_type, COALESCE(awb,''), COALESCE(carrier_shipment_id,''),
-               estimated_delivery_at, booked_at,
+               estimated_delivery_at, booked_at, shipped_at, delivered_at, cancelled_at,
                charges_paise, cod_amount_paise,
                pickup_location_id, pickup_address_snapshot, drop_address_snapshot,
                drop_pincode, package_weight_g, package_length_mm, package_width_mm, package_height_mm,
@@ -180,13 +180,12 @@ func (s *service) persistPhaseA(ctx context.Context, req BookRequest, c allocati
 
 		pickupJSON, _ := json.Marshal(req.PickupAddress)
 		dropJSON, _ := json.Marshal(req.DropAddress)
-		var pickupLocID uuid.UUID // placeholder — caller's BookRequest doesn't carry id yet
 		_, err := tx.Exec(ctx, insertShipmentSQL,
 			shipmentID, req.SellerID.UUID(), req.OrderID.UUID(), decisionID,
 			c.CarrierID.String(), string(c.ServiceType),
 			int64(c.Quote.TotalPaise),
 			int64(req.CODAmount),
-			pickupLocID,
+			req.PickupLocationID.UUID(),
 			pickupJSON, dropJSON, string(req.DropPincode),
 			req.PackageWeightG, req.PackageLengthMM, req.PackageWidthMM, req.PackageHeightMM,
 		)
@@ -247,7 +246,7 @@ func (s *service) GetByOrderID(ctx context.Context, sellerID core.SellerID, orde
 		sh, err := scanShipment(tx.QueryRow(ctx, `
             SELECT id, seller_id, order_id, allocation_decision_id, state,
                    carrier_code, service_type, COALESCE(awb,''), COALESCE(carrier_shipment_id,''),
-                   estimated_delivery_at, booked_at,
+                   estimated_delivery_at, booked_at, shipped_at, delivered_at, cancelled_at,
                    charges_paise, cod_amount_paise,
                    pickup_location_id, pickup_address_snapshot, drop_address_snapshot,
                    drop_pincode, package_weight_g, package_length_mm, package_width_mm, package_height_mm,
@@ -271,7 +270,7 @@ func (s *service) GetByAWB(ctx context.Context, awb string) (Shipment, error) {
 	row := s.pool.QueryRow(ctx, `
         SELECT id, seller_id, order_id, allocation_decision_id, state,
                carrier_code, service_type, COALESCE(awb,''), COALESCE(carrier_shipment_id,''),
-               estimated_delivery_at, booked_at,
+               estimated_delivery_at, booked_at, shipped_at, delivered_at, cancelled_at,
                charges_paise, cod_amount_paise,
                pickup_location_id, pickup_address_snapshot, drop_address_snapshot,
                drop_pincode, package_weight_g, package_length_mm, package_width_mm, package_height_mm,
@@ -290,7 +289,7 @@ func scanShipment(row pgx.Row) (Shipment, error) {
 	if err := row.Scan(
 		&id, &sellerID, &orderID, &decisionID, &state,
 		&carrierCode, &serviceType, &sh.AWB, &sh.CarrierShipmentID,
-		&sh.EstimatedDeliveryAt, &sh.BookedAt,
+		&sh.EstimatedDeliveryAt, &sh.BookedAt, &sh.ShippedAt, &sh.DeliveredAt, &sh.CancelledAt,
 		&charges, &cod,
 		&pickupLocID, &pickupJSON, &dropJSON,
 		&pincode, &sh.PackageWeightG, &sh.PackageLengthMM, &sh.PackageWidthMM, &sh.PackageHeightMM,
@@ -333,8 +332,26 @@ func (s *service) transition(ctx context.Context, sellerID core.SellerID, id cor
 		if ShipmentState(state) != from {
 			return fmt.Errorf("%w: shipment is %s not %s", core.ErrInvalidArgument, state, from)
 		}
-		if _, err := tx.Exec(ctx, updateShipmentStateSQL, id.UUID(), string(to), sellerID.UUID()); err != nil {
-			return fmt.Errorf("shipments.transition: %w", err)
+		// Stamp the corresponding timestamp column when entering a terminal
+		// or milestone state. NULL-safe (COALESCE) so a re-transition idempotent.
+		var stampCol string
+		switch to {
+		case StateInTransit:
+			stampCol = "shipped_at"
+		case StateDelivered:
+			stampCol = "delivered_at"
+		}
+		if stampCol != "" {
+			if _, err := tx.Exec(ctx,
+				fmt.Sprintf("UPDATE shipment SET state=$2, %s=COALESCE(%s, now()), updated_at=now() WHERE id=$1 AND seller_id=$3",
+					stampCol, stampCol),
+				id.UUID(), string(to), sellerID.UUID()); err != nil {
+				return fmt.Errorf("shipments.transition: %w", err)
+			}
+		} else {
+			if _, err := tx.Exec(ctx, updateShipmentStateSQL, id.UUID(), string(to), sellerID.UUID()); err != nil {
+				return fmt.Errorf("shipments.transition: %w", err)
+			}
 		}
 		_, err = tx.Exec(ctx, insertShipmentStateEventSQL,
 			id.UUID(), sellerID.UUID(), string(from), string(to), reason)

@@ -94,6 +94,10 @@ type Order struct {
 	AWBNumber        string                `json:"awb_number,omitempty"`
 	CarrierCode      string                `json:"carrier_code,omitempty"`
 	BookedAt         *time.Time            `json:"booked_at,omitempty"`
+	ShippedAt        *time.Time            `json:"shipped_at,omitempty"`
+	OutForDeliveryAt *time.Time            `json:"out_for_delivery_at,omitempty"`
+	DeliveredAt      *time.Time            `json:"delivered_at,omitempty"`
+	CancelledAt      *time.Time            `json:"cancelled_at,omitempty"`
 	Notes            string                `json:"notes,omitempty"`
 	Tags             []string              `json:"tags,omitempty"`
 	Lines            []OrderLine           `json:"lines"`

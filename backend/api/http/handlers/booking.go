@@ -87,10 +87,11 @@ func BookOrderHandler(d BookingDeps) http.HandlerFunc {
 		}
 
 		ship, err := d.Shipments.Book(r.Context(), shipments.BookRequest{
-			SellerID:        p.SellerID,
-			OrderID:         orderID,
-			Decision:        decision,
-			PickupAddress:   pickup.Address,
+			SellerID:         p.SellerID,
+			OrderID:          orderID,
+			PickupLocationID: order.PickupLocationID,
+			Decision:         decision,
+			PickupAddress:    pickup.Address,
 			PickupContact:   core.ContactInfo{Name: pickup.ContactName, Phone: pickup.ContactPhone, Email: pickup.ContactEmail},
 			DropAddress:     order.ShippingAddress,
 			DropContact:     core.ContactInfo{Name: order.BuyerName, Phone: order.BuyerPhone, Email: order.BuyerEmail},

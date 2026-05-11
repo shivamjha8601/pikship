@@ -10,6 +10,18 @@ export default function TrackingPage() {
   return <Shell><Inner /></Shell>;
 }
 
+function relativeTime(iso: string): string {
+  const then = new Date(iso).getTime();
+  const diff = Date.now() - then;
+  const m = Math.round(diff / 60000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.round(h / 24);
+  return `${d}d ago`;
+}
+
 function Inner() {
   const [orders, setOrders] = React.useState<Order[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -62,9 +74,18 @@ function Inner() {
                     <div>
                       <div className="text-sm font-medium">{o.channel_order_id}</div>
                       <div className="mt-0.5 text-xs text-muted">
-                        {o.awb_number ? `AWB ${o.awb_number} · ${o.carrier_code || ""}` : "awaiting AWB"}
+                        {o.awb_number ? `AWB ${o.awb_number}` : "awaiting AWB"}
                         {" · "}
                         {o.shipping_address.city}, {o.shipping_address.state}
+                      </div>
+                      <div className="text-[11px] text-muted">
+                        {o.delivered_at
+                          ? `Delivered ${relativeTime(o.delivered_at)}`
+                          : o.shipped_at
+                          ? `Shipped ${relativeTime(o.shipped_at)}`
+                          : o.booked_at
+                          ? `Booked ${relativeTime(o.booked_at)}`
+                          : null}
                       </div>
                     </div>
                     <OrderStateBadge state={o.state} />
