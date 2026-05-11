@@ -219,6 +219,47 @@ func (s *serviceImpl) MarkRTO(ctx context.Context, sellerID core.SellerID, id co
 	})
 }
 
+// MarkPaid records that a prepaid order's payment has reflected. Idempotent
+// — clicking twice doesn't churn paid_at. Refuses to mark COD orders (the
+// courier handles collection there) or already-refunded ones.
+func (s *serviceImpl) MarkPaid(ctx context.Context, sellerID core.SellerID, id core.OrderID, ref MarkPaidRef) error {
+	return dbtx.WithSellerTx(ctx, s.pool, sellerID, func(ctx context.Context, tx pgx.Tx) error {
+		var paymentMethod, paymentStatus string
+		err := tx.QueryRow(ctx, `SELECT payment_method, payment_status FROM order_record WHERE id=$1 AND seller_id=$2 FOR UPDATE`,
+			id.UUID(), sellerID.UUID()).Scan(&paymentMethod, &paymentStatus)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return core.ErrNotFound
+			}
+			return fmt.Errorf("orders.MarkPaid lock: %w", err)
+		}
+		if paymentMethod != string(core.PaymentModePrepaid) {
+			return fmt.Errorf("%w: cannot mark COD order as paid (handled by carrier)", core.ErrInvalidArgument)
+		}
+		if paymentStatus == "refunded" {
+			return fmt.Errorf("%w: order is already refunded", core.ErrInvalidArgument)
+		}
+		if paymentStatus == "paid" {
+			return nil // idempotent — already paid
+		}
+		var paidBy *string
+		if ref.PaidByUserID != nil {
+			s := ref.PaidByUserID.String()
+			paidBy = &s
+		}
+		_, err = tx.Exec(ctx, `
+            UPDATE order_record SET
+                payment_status = 'paid',
+                paid_at = COALESCE(paid_at, now()),
+                paid_reference = $2,
+                paid_by_user_id = $3,
+                updated_at = now()
+            WHERE id = $1 AND seller_id = $4`,
+			id.UUID(), ref.Reference, paidBy, sellerID.UUID())
+		return err
+	})
+}
+
 func (s *serviceImpl) Close(ctx context.Context, sellerID core.SellerID, id core.OrderID) error {
 	return dbtx.WithSellerTx(ctx, s.pool, sellerID, func(ctx context.Context, tx pgx.Tx) error {
 		var state string

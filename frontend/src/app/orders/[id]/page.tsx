@@ -7,7 +7,8 @@ import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { ordersApi, paiseToRupees, shipmentsApi, type Order, type Shipment, type TrackingEvent } from "@/lib/api";
 import { OrderStateBadge } from "@/components/OrderStateBadge";
-import { ArrowLeft, IndianRupee, RefreshCw, Send, Truck } from "lucide-react";
+import { ArrowLeft, Check, IndianRupee, RefreshCw, Send, Truck } from "lucide-react";
+import { Badge } from "@/components/ui/Badge";
 import { LinkButton } from "@/components/ui/Button";
 
 export default function OrderDetailPage() {
@@ -27,6 +28,8 @@ function Inner() {
   const [events, setEvents] = React.useState<TrackingEvent[]>([]);
   const [refreshing, setRefreshing] = React.useState(false);
   const [trackErr, setTrackErr] = React.useState<string | null>(null);
+  const [markingPaid, setMarkingPaid] = React.useState(false);
+  const [payErr, setPayErr] = React.useState<string | null>(null);
 
   const loadOrder = React.useCallback(() => {
     ordersApi.get(id).then(setOrder).catch((e) =>
@@ -77,6 +80,25 @@ function Inner() {
       setBookErr((e as { message?: string }).message || "Failed to book");
     } finally {
       setBooking(false);
+    }
+  }
+
+  async function markPaid() {
+    if (!order) return;
+    const ref = window.prompt(
+      "Payment reference (UPI txn ID or bank ref):",
+      "",
+    );
+    if (ref === null) return; // user cancelled
+    setMarkingPaid(true);
+    setPayErr(null);
+    try {
+      const updated = await ordersApi.markPaid(order.id, ref.trim());
+      setOrder(updated);
+    } catch (e) {
+      setPayErr((e as { message?: string }).message || "Failed to mark paid");
+    } finally {
+      setMarkingPaid(false);
     }
   }
 
@@ -136,12 +158,30 @@ function Inner() {
 
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-2xl font-semibold">{order.channel_order_id}</h1>
             <OrderStateBadge state={order.state} />
+            <PaymentBadge order={order} />
           </div>
           <p className="mt-1 text-sm text-muted">
             {order.channel} · created {new Date(order.created_at).toLocaleString()}
+          </p>
+          <p className="mt-0.5 text-xs text-muted">
+            {order.delivered_at
+              ? `Delivered ${new Date(order.delivered_at).toLocaleString()}`
+              : order.shipped_at
+              ? `Shipped ${new Date(order.shipped_at).toLocaleString()}`
+              : order.cancelled_at
+              ? `Cancelled ${new Date(order.cancelled_at).toLocaleString()}`
+              : order.booked_at
+              ? `Booked ${new Date(order.booked_at).toLocaleString()}`
+              : null}
+            {order.paid_at && (
+              <>
+                {" · "}Paid {new Date(order.paid_at).toLocaleString()}
+                {order.paid_reference && ` (${order.paid_reference})`}
+              </>
+            )}
           </p>
         </div>
         <div className="flex gap-2">
@@ -150,6 +190,12 @@ function Inner() {
               <LinkButton href={`/orders/${order.id}/pay`}>
                 <IndianRupee className="h-4 w-4" /> Pay {paiseToRupees(order.total_paise)}
               </LinkButton>
+            )}
+          {order.payment_method === "prepaid" &&
+            order.payment_status === "unpaid" && (
+              <Button variant="secondary" onClick={markPaid} loading={markingPaid}>
+                <Check className="h-4 w-4" /> Mark as paid
+              </Button>
             )}
           {!order.awb_number && ["draft", "ready"].includes(order.state) && (
             <Button onClick={book} loading={booking}>
@@ -238,6 +284,11 @@ function Inner() {
           {bookErr}
         </div>
       )}
+      {payErr && (
+        <div className="rounded-md border border-danger/20 bg-danger/5 px-4 py-3 text-sm text-danger">
+          {payErr}
+        </div>
+      )}
 
       {(shipment || order.awb_number) && (
         <Card>
@@ -287,4 +338,22 @@ function Inner() {
       )}
     </div>
   );
+}
+
+function PaymentBadge({ order }: { order: Order }) {
+  const status = order.payment_status;
+  if (!status) return null;
+  switch (status) {
+    case "paid":
+      return <Badge tone="success"><Check className="h-3 w-3" /> Paid</Badge>;
+    case "refunded":
+      return <Badge tone="warning">Refunded</Badge>;
+    case "pending_cod":
+      return <Badge tone="neutral">COD pending</Badge>;
+    case "cod_collected":
+      return <Badge tone="success">COD collected</Badge>;
+    case "unpaid":
+    default:
+      return <Badge tone="warning">Unpaid</Badge>;
+  }
 }

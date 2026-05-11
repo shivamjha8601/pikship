@@ -18,6 +18,7 @@ type Service interface {
 	Update(ctx context.Context, sellerID core.SellerID, id core.OrderID, patch UpdatePatch) (Order, error)
 	MarkReady(ctx context.Context, sellerID core.SellerID, id core.OrderID) error
 	Cancel(ctx context.Context, sellerID core.SellerID, id core.OrderID, reason string) error
+	MarkPaid(ctx context.Context, sellerID core.SellerID, id core.OrderID, ref MarkPaidRef) error
 	MarkAllocating(ctx context.Context, sellerID core.SellerID, id core.OrderID) error
 	MarkBooked(ctx context.Context, sellerID core.SellerID, id core.OrderID, ref BookedRef) error
 	MarkInTransit(ctx context.Context, sellerID core.SellerID, id core.OrderID) error
@@ -98,6 +99,9 @@ type Order struct {
 	OutForDeliveryAt *time.Time            `json:"out_for_delivery_at,omitempty"`
 	DeliveredAt      *time.Time            `json:"delivered_at,omitempty"`
 	CancelledAt      *time.Time            `json:"cancelled_at,omitempty"`
+	PaymentStatus    string                `json:"payment_status"`
+	PaidAt           *time.Time            `json:"paid_at,omitempty"`
+	PaidReference    string                `json:"paid_reference,omitempty"`
 	Notes            string                `json:"notes,omitempty"`
 	Tags             []string              `json:"tags,omitempty"`
 	Lines            []OrderLine           `json:"lines"`
@@ -161,6 +165,15 @@ type UpdatePatch struct {
 type BookedRef struct {
 	AWBNumber   string
 	CarrierCode string
+}
+
+// MarkPaidRef captures the (manual or webhook) reconciliation for a prepaid
+// payment. Reference is the UPI txn ID, bank ref, or whatever the seller
+// pasted from their payment app; PaidByUserID identifies which user clicked
+// "Mark paid" (kept for audit, not surfaced in lists).
+type MarkPaidRef struct {
+	Reference     string
+	PaidByUserID  *core.UserID
 }
 
 // ListQuery filters the order list.

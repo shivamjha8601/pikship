@@ -209,6 +209,9 @@ export type Order = {
   out_for_delivery_at?: string;
   delivered_at?: string;
   cancelled_at?: string;
+  payment_status?: "unpaid" | "paid" | "refunded" | "pending_cod" | "cod_collected";
+  paid_at?: string;
+  paid_reference?: string;
   notes?: string;
   tags?: string[];
   lines: OrderLine[];
@@ -322,6 +325,8 @@ export const ordersApi = {
     api.post<{ status: string }>(`/v1/orders/${id}/cancel`, { reason }),
   book: (id: string) => api.post<Shipment>(`/v1/orders/${id}/book`),
   shipment: (id: string) => api.get<Shipment>(`/v1/orders/${id}/shipment`),
+  markPaid: (id: string, reference: string) =>
+    api.post<Order>(`/v1/orders/${id}/mark-paid`, { reference }),
 };
 
 export type Shipment = {

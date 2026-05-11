@@ -31,10 +31,11 @@ const (
             shipping_pincode, shipping_state, payment_method,
             subtotal_paise, shipping_paise, discount_paise, tax_paise, total_paise, cod_amount_paise,
             pickup_location_id, package_weight_g, package_length_mm, package_width_mm, package_height_mm,
-            notes, tags
+            notes, tags, payment_status
         ) VALUES (
             $1,'draft',$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10,$11,$12,
-            $13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25
+            $13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,
+            CASE WHEN $12 = 'cod' THEN 'pending_cod' ELSE 'unpaid' END
         ) RETURNING id, created_at, updated_at
     `
 	insertOrderLineSQL = `
@@ -56,6 +57,7 @@ const (
                package_width_mm, package_height_mm,
                COALESCE(awb_number,''), COALESCE(carrier_code,''),
                booked_at, shipped_at, out_for_delivery_at, delivered_at, cancelled_at,
+               payment_status, paid_at, COALESCE(paid_reference,''),
                COALESCE(notes,''), COALESCE(tags,'{}'), created_at, updated_at
         FROM order_record WHERE id = $1 AND seller_id = $2
     `
@@ -69,6 +71,7 @@ const (
                package_width_mm, package_height_mm,
                COALESCE(awb_number,''), COALESCE(carrier_code,''),
                booked_at, shipped_at, out_for_delivery_at, delivered_at, cancelled_at,
+               payment_status, paid_at, COALESCE(paid_reference,''),
                COALESCE(notes,''), COALESCE(tags,'{}'), created_at, updated_at
         FROM order_record WHERE seller_id = $1 AND channel = $2 AND channel_order_id = $3
     `
@@ -171,6 +174,7 @@ func scanOrder(row pgx.Row) (Order, error) {
 		&pickupID, &weightG, &lenMM, &widMM, &heiMM,
 		&o.AWBNumber, &o.CarrierCode,
 		&o.BookedAt, &o.ShippedAt, &o.OutForDeliveryAt, &o.DeliveredAt, &o.CancelledAt,
+		&o.PaymentStatus, &o.PaidAt, &o.PaidReference,
 		&o.Notes, &tags, &o.CreatedAt, &o.UpdatedAt,
 	); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

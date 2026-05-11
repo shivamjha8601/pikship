@@ -143,10 +143,43 @@ func GetOrderShipmentHandler(d OrdersDeps) http.HandlerFunc {
 	}
 }
 
+// MarkPaidHandler records the seller's manual confirmation that a UPI/bank
+// transfer has reflected. Until Razorpay webhooks land, this is how prepaid
+// orders flip from "unpaid" to "paid".
+func MarkPaidHandler(d OrdersDeps) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		p := auth.MustPrincipalFrom(r.Context())
+		id, err := core.ParseOrderID(chi.URLParam(r, "orderID"))
+		if err != nil {
+			writeError(w, r, core.ErrInvalidArgument)
+			return
+		}
+		var req struct {
+			Reference string `json:"reference"`
+		}
+		_ = decode(r, &req)
+		userID := p.UserID
+		if err := d.Orders.MarkPaid(r.Context(), p.SellerID, id, orders.MarkPaidRef{
+			Reference:    req.Reference,
+			PaidByUserID: &userID,
+		}); err != nil {
+			writeError(w, r, err)
+			return
+		}
+		order, err := d.Orders.Get(r.Context(), p.SellerID, id)
+		if err != nil {
+			writeError(w, r, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, order)
+	}
+}
+
 func MountOrders(r chi.Router, d OrdersDeps) {
 	r.Get("/orders", ListOrdersHandler(d))
 	r.Post("/orders", CreateOrderHandler(d))
 	r.Get("/orders/{orderID}", GetOrderHandler(d))
 	r.Post("/orders/{orderID}/cancel", CancelOrderHandler(d))
+	r.Post("/orders/{orderID}/mark-paid", MarkPaidHandler(d))
 	r.Get("/orders/{orderID}/shipment", GetOrderShipmentHandler(d))
 }
