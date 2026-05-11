@@ -86,7 +86,9 @@ export function PincodeInput({
           </span>
         )}
         {status === "not_found" && (
-          <span className="text-warning">No location found for this pincode.</span>
+          <span className="text-muted">
+            Couldn&apos;t auto-fill city/state — you can still use this pincode.
+          </span>
         )}
         {status === "idle" && (
           <span className="text-muted">6 digits — we'll fill in city & state.</span>

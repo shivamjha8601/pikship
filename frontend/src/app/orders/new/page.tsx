@@ -11,11 +11,13 @@ import {
   catalogApi,
   ordersApi,
   paiseToRupees,
+  pricingApi,
   type BuyerAddress,
   type BuyerAddressInput,
   type PickupLocation,
+  type PricingQuote,
 } from "@/lib/api";
-import { Package as PackageIcon, Plus, Trash2, Star, Warehouse } from "lucide-react";
+import { Calculator, Loader2, Package as PackageIcon, Plus, Trash2, Star, Warehouse } from "lucide-react";
 import {
   WarehouseForm,
   EMPTY_WAREHOUSE,
@@ -77,6 +79,14 @@ function Inner() {
   const [packageL, setPackageL] = React.useState(20);
   const [packageW, setPackageW] = React.useState(15);
   const [packageH, setPackageH] = React.useState(10);
+
+  // Live shipping quote from the pricing engine. The seller declares item
+  // value; we compute the actual shipping price they (or the buyer in COD)
+  // will pay. Recomputes when the route, dimensions, weight, or payment mode
+  // changes — debounced so typing doesn't hammer the backend.
+  const [quote, setQuote] = React.useState<PricingQuote | null>(null);
+  const [quoting, setQuoting] = React.useState(false);
+  const [quoteErr, setQuoteErr] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     Promise.all([catalogApi.listPickups(), catalogApi.listBuyerAddresses()])
@@ -144,6 +154,69 @@ function Inner() {
 
   const subtotal = lines.reduce((s, l) => s + l.price * l.quantity * 100, 0);
   const totalWeight = lines.reduce((s, l) => s + l.weight * l.quantity, 0);
+  const shippingPaise = quote?.total_paise ?? 0;
+  const totalPaise = subtotal + shippingPaise;
+
+  const pickupPincode =
+    pickups.find((p) => p.id === pickupID)?.pincode ?? "";
+
+  // Pre-conditions for asking the pricing engine for a quote: route is fully
+  // known, weight is positive, dimensions are positive.
+  const canQuote =
+    /^[1-9]\d{5}$/.test(pickupPincode) &&
+    /^[1-9]\d{5}$/.test(shipPincode) &&
+    totalWeight > 0 &&
+    packageL >= 1 && packageW >= 1 && packageH >= 1;
+
+  // Debounced auto-quote. Anything that changes the route, package, or
+  // payment mode resets the quote and re-fetches 400ms later. AbortController
+  // cancels in-flight requests when inputs change again before the response.
+  React.useEffect(() => {
+    if (!canQuote) {
+      setQuote(null);
+      setQuoteErr(null);
+      return;
+    }
+    setQuoting(true);
+    setQuoteErr(null);
+    const ctrl = new AbortController();
+    const t = setTimeout(async () => {
+      try {
+        const res = await pricingApi.quote({
+          pickup_pincode: pickupPincode,
+          ship_to_pincode: shipPincode,
+          payment_mode: paymentMethod,
+          declared_value_paise: subtotal,
+          packages: [
+            {
+              weight_g: totalWeight,
+              length_mm: packageL * 10,
+              width_mm: packageW * 10,
+              height_mm: packageH * 10,
+            },
+          ],
+        });
+        if (ctrl.signal.aborted) return;
+        const cheapest = [...(res.quotes || [])].sort(
+          (a, b) => a.total_paise - b.total_paise,
+        )[0];
+        setQuote(cheapest ?? null);
+        if (!cheapest) {
+          setQuoteErr("No carrier prices this route yet — try a different pincode pair or contact support.");
+        }
+      } catch (e) {
+        if (ctrl.signal.aborted) return;
+        setQuote(null);
+        setQuoteErr((e as { message?: string }).message || "Failed to fetch shipping quote");
+      } finally {
+        if (!ctrl.signal.aborted) setQuoting(false);
+      }
+    }, 400);
+    return () => {
+      ctrl.abort();
+      clearTimeout(t);
+    };
+  }, [canQuote, pickupPincode, shipPincode, paymentMethod, totalWeight, packageL, packageW, packageH, subtotal]);
 
   const canSubmit =
     buyerName.trim() !== "" &&
@@ -155,7 +228,8 @@ function Inner() {
     /^[1-9]\d{5}$/.test(shipPincode) &&
     lines.length > 0 &&
     lines.every((l) => l.quantity >= 1 && l.weight >= 1) &&
-    packageL >= 1 && packageW >= 1 && packageH >= 1;
+    packageL >= 1 && packageW >= 1 && packageH >= 1 &&
+    quote !== null;
 
   function setLine(i: number, patch: Partial<Line>) {
     setLines((cur) => cur.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
@@ -220,11 +294,11 @@ function Inner() {
         shipping_state: shipState,
         payment_method: paymentMethod,
         subtotal_paise: subtotal,
-        shipping_paise: 0,
+        shipping_paise: shippingPaise,
         discount_paise: 0,
         tax_paise: 0,
-        total_paise: subtotal,
-        cod_amount_paise: paymentMethod === "cod" ? subtotal : 0,
+        total_paise: totalPaise,
+        cod_amount_paise: paymentMethod === "cod" ? totalPaise : 0,
         pickup_location_id: pickupID,
         package_weight_g: Math.max(100, totalWeight),
         package_length_mm: packageL * 10,
@@ -568,7 +642,12 @@ function Inner() {
       <Card>
         <CardHeader>
           <CardTitle>Items</CardTitle>
-          <CardDescription>What's inside the package. Weight is per item, in grams.</CardDescription>
+          <CardDescription>
+            What's inside the package. Item value is the <strong>declared
+            worth of goods</strong> — used for the invoice and (for COD
+            orders) what the buyer pays. Shipping is calculated separately
+            below.
+          </CardDescription>
         </CardHeader>
         <CardBody className="space-y-3">
           {lines.map((l, i) => {
@@ -622,7 +701,7 @@ function Inner() {
                       onChange={(e) => setLine(i, { quantity: Math.max(1, Number(e.target.value) || 0) })}
                     />
                   </Field>
-                  <Field label="Unit price (₹)">
+                  <Field label="Declared value (₹)">
                     <Input
                       type="number"
                       inputMode="decimal"
@@ -745,16 +824,83 @@ function Inner() {
       </Card>
 
       <Card>
-        <CardBody className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="text-sm text-muted">
-            <div>
-              Items subtotal{" "}
-              <span className="font-medium text-text">{paiseToRupees(subtotal)}</span>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Calculator className="h-4 w-4 text-muted" />
+            Shipping
+          </CardTitle>
+          <CardDescription>
+            Calculated from your route, package size, and weight. You don't set
+            this — we do. Refreshes as you change inputs above.
+          </CardDescription>
+        </CardHeader>
+        <CardBody>
+          {!canQuote && (
+            <p className="text-sm text-muted">
+              Fill in pickup warehouse, ship-to pincode, package dimensions, and
+              item weights to see a shipping quote.
+            </p>
+          )}
+          {canQuote && quoting && (
+            <div className="flex items-center gap-2 text-sm text-muted">
+              <Loader2 className="h-4 w-4 animate-spin" /> Getting quote…
             </div>
-            <div className="mt-0.5 text-xs">
+          )}
+          {canQuote && !quoting && quoteErr && (
+            <div className="rounded-md border border-danger/20 bg-danger/5 px-3 py-2 text-sm text-danger">
+              {quoteErr}
+            </div>
+          )}
+          {canQuote && !quoting && quote && (
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-medium capitalize">{quote.carrier_code || "carrier"}</span>
+                  <span className="rounded bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-accent">
+                    {quote.service_type}
+                  </span>
+                  {quote.zone && (
+                    <span className="rounded bg-bg px-1.5 py-0.5 text-[10px] font-medium text-muted">
+                      Zone {quote.zone}
+                    </span>
+                  )}
+                </div>
+                <div className="mt-0.5 text-xs text-muted">
+                  {quote.estimated_days} day{quote.estimated_days === 1 ? "" : "s"} estimated · {totalWeight.toLocaleString("en-IN")} g chargeable
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-xl font-semibold tabular-nums">
+                  {paiseToRupees(quote.total_paise)}
+                </div>
+                <div className="text-xs text-muted">shipping</div>
+              </div>
+            </div>
+          )}
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardBody className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="text-sm">
+            <div className="flex justify-between gap-6 text-muted">
+              <span>Items subtotal</span>
+              <span className="font-medium text-text tabular-nums">{paiseToRupees(subtotal)}</span>
+            </div>
+            <div className="flex justify-between gap-6 text-muted">
+              <span>Shipping</span>
+              <span className="font-medium text-text tabular-nums">
+                {quote ? paiseToRupees(shippingPaise) : "—"}
+              </span>
+            </div>
+            <div className="mt-1 flex justify-between gap-6 border-t border-border pt-1">
+              <span className="font-semibold">Total</span>
+              <span className="font-semibold tabular-nums">{paiseToRupees(totalPaise)}</span>
+            </div>
+            <div className="mt-1 text-xs text-muted">
               {paymentMethod === "cod"
-                ? `${paiseToRupees(subtotal)} to collect from buyer (COD)`
-                : "Prepaid — no collection at delivery"}
+                ? `${paiseToRupees(totalPaise)} to collect from buyer at delivery`
+                : "Prepaid — seller is billed shipping; items are between seller and buyer"}
             </div>
           </div>
           <div className="flex flex-col items-end gap-1 sm:items-end">
