@@ -12,8 +12,9 @@ import (
 
 // CatalogDeps are the dependencies for catalog handlers.
 type CatalogDeps struct {
-	Pickup  catalog.PickupService
-	Product catalog.ProductService
+	Pickup        catalog.PickupService
+	Product       catalog.ProductService
+	BuyerAddress  catalog.BuyerAddressService
 }
 
 // --- Pickup Locations ---
@@ -97,10 +98,122 @@ func UpsertProductHandler(d CatalogDeps) http.HandlerFunc {
 	}
 }
 
+// --- Buyer Addresses ---
+
+func ListBuyerAddressesHandler(d CatalogDeps) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		p := auth.MustPrincipalFrom(r.Context())
+		items, err := d.BuyerAddress.List(r.Context(), p.SellerID)
+		if err != nil {
+			writeError(w, r, err)
+			return
+		}
+		if items == nil {
+			items = []catalog.BuyerAddress{}
+		}
+		writeJSON(w, http.StatusOK, items)
+	}
+}
+
+func CreateBuyerAddressHandler(d CatalogDeps) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		p := auth.MustPrincipalFrom(r.Context())
+		var req catalog.BuyerAddressCreateRequest
+		if err := decode(r, &req); err != nil {
+			writeError(w, r, err)
+			return
+		}
+		req.SellerID = p.SellerID
+		item, err := d.BuyerAddress.Create(r.Context(), req)
+		if err != nil {
+			writeError(w, r, err)
+			return
+		}
+		writeJSON(w, http.StatusCreated, item)
+	}
+}
+
+func GetBuyerAddressHandler(d CatalogDeps) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		p := auth.MustPrincipalFrom(r.Context())
+		id, err := core.ParseBuyerAddressID(chi.URLParam(r, "addrID"))
+		if err != nil {
+			writeError(w, r, core.ErrInvalidArgument)
+			return
+		}
+		item, err := d.BuyerAddress.Get(r.Context(), p.SellerID, id)
+		if err != nil {
+			writeError(w, r, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, item)
+	}
+}
+
+func UpdateBuyerAddressHandler(d CatalogDeps) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		p := auth.MustPrincipalFrom(r.Context())
+		id, err := core.ParseBuyerAddressID(chi.URLParam(r, "addrID"))
+		if err != nil {
+			writeError(w, r, core.ErrInvalidArgument)
+			return
+		}
+		var patch catalog.BuyerAddressPatch
+		if err := decode(r, &patch); err != nil {
+			writeError(w, r, err)
+			return
+		}
+		item, err := d.BuyerAddress.Update(r.Context(), p.SellerID, id, patch)
+		if err != nil {
+			writeError(w, r, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, item)
+	}
+}
+
+func DeleteBuyerAddressHandler(d CatalogDeps) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		p := auth.MustPrincipalFrom(r.Context())
+		id, err := core.ParseBuyerAddressID(chi.URLParam(r, "addrID"))
+		if err != nil {
+			writeError(w, r, core.ErrInvalidArgument)
+			return
+		}
+		if err := d.BuyerAddress.SoftDelete(r.Context(), p.SellerID, id); err != nil {
+			writeError(w, r, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+func SetDefaultBuyerAddressHandler(d CatalogDeps) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		p := auth.MustPrincipalFrom(r.Context())
+		id, err := core.ParseBuyerAddressID(chi.URLParam(r, "addrID"))
+		if err != nil {
+			writeError(w, r, core.ErrInvalidArgument)
+			return
+		}
+		if err := d.BuyerAddress.SetDefault(r.Context(), p.SellerID, id); err != nil {
+			writeError(w, r, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
 func MountCatalog(r chi.Router, d CatalogDeps) {
 	r.Get("/pickup-locations", ListPickupsHandler(d))
 	r.Post("/pickup-locations", CreatePickupHandler(d))
 	r.Get("/pickup-locations/{pickupID}", GetPickupHandler(d))
 	r.Get("/products", ListProductsHandler(d))
 	r.Put("/products", UpsertProductHandler(d))
+	r.Get("/buyer-addresses", ListBuyerAddressesHandler(d))
+	r.Post("/buyer-addresses", CreateBuyerAddressHandler(d))
+	r.Get("/buyer-addresses/{addrID}", GetBuyerAddressHandler(d))
+	r.Patch("/buyer-addresses/{addrID}", UpdateBuyerAddressHandler(d))
+	r.Delete("/buyer-addresses/{addrID}", DeleteBuyerAddressHandler(d))
+	r.Post("/buyer-addresses/{addrID}/default", SetDefaultBuyerAddressHandler(d))
 }

@@ -21,6 +21,7 @@ type (
 	PickupLocationID     uuid.UUID
 	ProductID            uuid.UUID
 	BuyerID              uuid.UUID
+	BuyerAddressID       uuid.UUID
 	AuditEventID         uuid.UUID
 	HoldID               uuid.UUID
 	LedgerEntryID        uuid.UUID
@@ -189,6 +190,23 @@ func (id BuyerID) IsZero() bool            { return uuid.UUID(id) == uuid.Nil }
 func BuyerIDFromUUID(u uuid.UUID) BuyerID  { return BuyerID(u) }
 func (id BuyerID) Value() (driver.Value, error) { return uuidValue(uuid.UUID(id)) }
 func (id *BuyerID) Scan(src any) error          { return uuidScan(src, (*uuid.UUID)(id)) }
+
+// --- BuyerAddressID ---
+
+func NewBuyerAddressID() BuyerAddressID                  { return BuyerAddressID(uuid.New()) }
+func (id BuyerAddressID) String() string                 { return uuid.UUID(id).String() }
+func (id BuyerAddressID) UUID() uuid.UUID                { return uuid.UUID(id) }
+func (id BuyerAddressID) IsZero() bool                   { return uuid.UUID(id) == uuid.Nil }
+func BuyerAddressIDFromUUID(u uuid.UUID) BuyerAddressID  { return BuyerAddressID(u) }
+func ParseBuyerAddressID(s string) (BuyerAddressID, error) {
+	u, err := uuid.Parse(s)
+	if err != nil {
+		return BuyerAddressID{}, fmt.Errorf("core.ParseBuyerAddressID: %w", err)
+	}
+	return BuyerAddressID(u), nil
+}
+func (id BuyerAddressID) Value() (driver.Value, error) { return uuidValue(uuid.UUID(id)) }
+func (id *BuyerAddressID) Scan(src any) error          { return uuidScan(src, (*uuid.UUID)(id)) }
 
 // --- AuditEventID ---
 

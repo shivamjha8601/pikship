@@ -169,6 +169,7 @@ func run(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 	// Catalog.
 	pickupSvc := catalog.NewPickupService(poolApp, log)
 	productSvc := catalog.NewProductService(poolApp, log)
+	buyerAddrSvc := catalog.NewBuyerAddressService(poolApp, log)
 
 	// Orders.
 	orderSvc := orders.New(poolApp, nil, log)
@@ -228,8 +229,9 @@ func run(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 			Auth:      authSvc,
 			Identity:  identitySvc,
 			Seller:    sellerSvc,
-			Pickup:    pickupSvc,
-			Product:   productSvc,
+			Pickup:       pickupSvc,
+			Product:      productSvc,
+			BuyerAddress: buyerAddrSvc,
 			Orders:    orderSvc,
 			Shipments: shipSvc,
 			Wallet:    walletSvc,

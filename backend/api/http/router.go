@@ -34,8 +34,9 @@ type AppDeps struct {
 	Auth      auth.Authenticator
 	Identity  identity.Service
 	Seller    seller.Service
-	Pickup    catalog.PickupService
-	Product   catalog.ProductService
+	Pickup       catalog.PickupService
+	Product      catalog.ProductService
+	BuyerAddress catalog.BuyerAddressService
 	Orders    orders.Service
 	Shipments shipments.Service
 	Wallet    wallet.Service
@@ -123,8 +124,9 @@ func NewAppRouter(deps AppDeps, requestTimeout time.Duration) chi.Router {
 				handlers.MountSeller(r, handlers.SellerDeps{Seller: deps.Seller})
 				handlers.MountSellerContractViews(r, adminDeps)
 				handlers.MountCatalog(r, handlers.CatalogDeps{
-					Pickup:  deps.Pickup,
-					Product: deps.Product,
+					Pickup:       deps.Pickup,
+					Product:      deps.Product,
+					BuyerAddress: deps.BuyerAddress,
 				})
 				handlers.MountOrders(r, handlers.OrdersDeps{
 					Orders: deps.Orders,
