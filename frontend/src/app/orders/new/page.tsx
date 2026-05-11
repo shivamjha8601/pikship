@@ -7,8 +7,15 @@ import { Button } from "@/components/ui/Button";
 import { Field, Input } from "@/components/ui/Input";
 import { PhoneInput, isValidIndianMobile } from "@/components/ui/PhoneInput";
 import { PincodeInput } from "@/components/ui/PincodeInput";
-import { catalogApi, ordersApi, paiseToRupees, type PickupLocation } from "@/lib/api";
-import { MapPin, Package as PackageIcon, Plus, Trash2 } from "lucide-react";
+import {
+  catalogApi,
+  ordersApi,
+  paiseToRupees,
+  type BuyerAddress,
+  type BuyerAddressInput,
+  type PickupLocation,
+} from "@/lib/api";
+import { MapPin, Package as PackageIcon, Plus, Trash2, Star } from "lucide-react";
 
 type Line = { sku: string; name: string; quantity: number; price: number; weight: number };
 
@@ -27,6 +34,7 @@ export default function NewOrderPage() {
 function Inner() {
   const router = useRouter();
   const [pickups, setPickups] = React.useState<PickupLocation[]>([]);
+  const [savedAddresses, setSavedAddresses] = React.useState<BuyerAddress[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -34,9 +42,15 @@ function Inner() {
   const [pickupID, setPickupID] = React.useState("");
   const [channel, setChannel] = React.useState("manual");
   const [channelOrderID, setChannelOrderID] = React.useState("");
+  // "" means "new buyer" (fill the form below); otherwise the saved-address ID.
+  const [savedAddrID, setSavedAddrID] = React.useState<string>("");
+  const [saveToBook, setSaveToBook] = React.useState(false);
+  const [addrLabel, setAddrLabel] = React.useState("");
   const [buyerName, setBuyerName] = React.useState("");
   const [buyerPhone, setBuyerPhone] = React.useState("+91");
+  const [buyerEmail, setBuyerEmail] = React.useState("");
   const [shipLine1, setShipLine1] = React.useState("");
+  const [shipLine2, setShipLine2] = React.useState("");
   const [shipCity, setShipCity] = React.useState("");
   const [shipState, setShipState] = React.useState("");
   const [shipPincode, setShipPincode] = React.useState("");
@@ -54,19 +68,52 @@ function Inner() {
   const [packageH, setPackageH] = React.useState(10);
 
   React.useEffect(() => {
-    catalogApi.listPickups()
-      .then((p) => {
-        const list = p || [];
-        setPickups(list);
-        const def = list.find((x) => x.is_default) || list[0];
+    Promise.all([catalogApi.listPickups(), catalogApi.listBuyerAddresses()])
+      .then(([p, a]) => {
+        const pickupList = p || [];
+        const addrList = a || [];
+        setPickups(pickupList);
+        setSavedAddresses(addrList);
+        const def = pickupList.find((x) => x.is_default) || pickupList[0];
         if (def) setPickupID(def.id);
+        const defAddr = addrList.find((x) => x.is_default);
+        if (defAddr) applySavedAddress(defAddr);
         setLoading(false);
       })
       .catch((e) => {
-        setError((e as { message?: string }).message || "Failed to load pickup locations");
+        setError((e as { message?: string }).message || "Failed to load");
         setLoading(false);
       });
+    // applySavedAddress is stable for our purposes — it only reads from
+    // function arguments and sets pure useState setters.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  function applySavedAddress(a: BuyerAddress) {
+    setSavedAddrID(a.id);
+    setSaveToBook(false);
+    setBuyerName(a.buyer_name);
+    setBuyerPhone(a.buyer_phone);
+    setBuyerEmail(a.buyer_email || "");
+    setShipLine1(a.address.line1);
+    setShipLine2(a.address.line2 || "");
+    setShipCity(a.address.city);
+    setShipState(a.state);
+    setShipPincode(a.pincode);
+  }
+
+  function clearAddressForm() {
+    setSavedAddrID("");
+    setAddrLabel("");
+    setBuyerName("");
+    setBuyerPhone("+91");
+    setBuyerEmail("");
+    setShipLine1("");
+    setShipLine2("");
+    setShipCity("");
+    setShipState("");
+    setShipPincode("");
+  }
 
   const subtotal = lines.reduce((s, l) => s + l.price * l.quantity * 100, 0);
   const totalWeight = lines.reduce((s, l) => s + l.weight * l.quantity, 0);
@@ -103,14 +150,43 @@ function Inner() {
     setError(null);
     setSubmitting(true);
     try {
-      const ship = { line1: shipLine1, city: shipCity, state: shipState, country: "IN", pincode: shipPincode };
+      const ship = {
+        line1: shipLine1,
+        line2: shipLine2 || undefined,
+        city: shipCity,
+        state: shipState,
+        country: "IN",
+        pincode: shipPincode,
+      };
+      // Persist to address book first when requested. We do this before
+      // creating the order so a failed save doesn't dangle behind a
+      // successful order — and a failed order doesn't dangle a book entry.
+      if (!savedAddrID && saveToBook && addrLabel.trim()) {
+        const payload: BuyerAddressInput = {
+          label: addrLabel.trim(),
+          buyer_name: buyerName,
+          buyer_phone: buyerPhone,
+          buyer_email: buyerEmail || undefined,
+          address: ship,
+          pincode: shipPincode,
+          state: shipState,
+          is_default: false,
+        };
+        try {
+          await catalogApi.createBuyerAddress(payload);
+        } catch (e) {
+          // Saving the book entry isn't worth blocking the order on. Surface
+          // it as a warning but keep going.
+          console.warn("save buyer_address failed:", (e as { message?: string }).message);
+        }
+      }
       const order = await ordersApi.create({
         channel,
         channel_order_id: channelOrderID || fallbackChannelOrderID.current,
         order_ref: "",
         buyer_name: buyerName,
         buyer_phone: buyerPhone,
-        buyer_email: "",
+        buyer_email: buyerEmail || "",
         billing_address: ship,
         shipping_address: ship,
         shipping_pincode: shipPincode,
@@ -188,46 +264,162 @@ function Inner() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Buyer</CardTitle>
+          <CardTitle>Buyer & shipping</CardTitle>
+          <CardDescription>
+            Pick from your saved addresses or enter a new one. New entries can
+            be saved to your address book for next time.
+          </CardDescription>
         </CardHeader>
-        <CardBody className="grid gap-4 sm:grid-cols-2">
-          <Field label="Name">
-            <Input required value={buyerName} onChange={(e) => setBuyerName(e.target.value)} />
-          </Field>
-          <Field
-            label="Phone"
-            error={buyerPhone !== "+91" && !isValidIndianMobile(buyerPhone) ? "10 digits, starts with 6/7/8/9" : undefined}
-          >
-            <PhoneInput value={buyerPhone} onChange={setBuyerPhone} required />
-          </Field>
-        </CardBody>
-      </Card>
+        <CardBody className="space-y-4">
+          {savedAddresses.length > 0 && (
+            <div>
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-sm font-medium">Saved addresses</span>
+                <a
+                  href="/account?tab=addresses"
+                  className="text-xs text-accent hover:underline"
+                >
+                  Manage
+                </a>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {savedAddresses.map((a) => {
+                  const active = savedAddrID === a.id;
+                  return (
+                    <button
+                      type="button"
+                      key={a.id}
+                      onClick={() => applySavedAddress(a)}
+                      className={
+                        "rounded-md border p-3 text-left text-sm transition-colors " +
+                        (active
+                          ? "border-accent bg-accent/5"
+                          : "border-border bg-surface hover:bg-bg")
+                      }
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">{a.label}</span>
+                        {a.is_default && (
+                          <span className="inline-flex items-center gap-0.5 rounded bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-accent">
+                            <Star className="h-2.5 w-2.5" /> Default
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs text-muted">
+                        {a.buyer_name} · {a.buyer_phone}
+                      </div>
+                      <div className="truncate text-xs text-muted">
+                        {a.address.line1}, {a.address.city} {a.pincode}
+                      </div>
+                    </button>
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={clearAddressForm}
+                  className={
+                    "flex items-center justify-center gap-1 rounded-md border border-dashed p-3 text-sm " +
+                    (savedAddrID === ""
+                      ? "border-accent bg-accent/5 text-accent"
+                      : "border-border text-muted hover:bg-bg")
+                  }
+                >
+                  <Plus className="h-4 w-4" /> New address
+                </button>
+              </div>
+            </div>
+          )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Shipping address</CardTitle>
-        </CardHeader>
-        <CardBody className="grid gap-4 sm:grid-cols-2">
-          <Field label="Pincode">
-            <PincodeInput
-              value={shipPincode}
-              onChange={setShipPincode}
-              onResolve={({ city, state }) => {
-                if (!shipCity) setShipCity(city);
-                if (!shipState) setShipState(state);
-              }}
-              required
-            />
-          </Field>
-          <Field label="Address line 1" hint="Street, locality">
-            <Input required value={shipLine1} onChange={(e) => setShipLine1(e.target.value)} />
-          </Field>
-          <Field label="City">
-            <Input required value={shipCity} onChange={(e) => setShipCity(e.target.value)} />
-          </Field>
-          <Field label="State">
-            <Input required value={shipState} onChange={(e) => setShipState(e.target.value)} />
-          </Field>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Recipient name">
+              <Input
+                required
+                value={buyerName}
+                onChange={(e) => setBuyerName(e.target.value)}
+              />
+            </Field>
+            <Field
+              label="Phone"
+              error={
+                buyerPhone !== "+91" && !isValidIndianMobile(buyerPhone)
+                  ? "10 digits, starts with 6/7/8/9"
+                  : undefined
+              }
+            >
+              <PhoneInput value={buyerPhone} onChange={setBuyerPhone} required />
+            </Field>
+            <Field label="Email" hint="Optional — used for tracking notifications">
+              <Input
+                type="email"
+                value={buyerEmail}
+                onChange={(e) => setBuyerEmail(e.target.value)}
+              />
+            </Field>
+            <Field label="Pincode">
+              <PincodeInput
+                value={shipPincode}
+                onChange={setShipPincode}
+                onResolve={({ city, state }) => {
+                  if (!shipCity) setShipCity(city);
+                  if (!shipState) setShipState(state);
+                }}
+                required
+              />
+            </Field>
+            <Field label="Address line 1" hint="Street, locality">
+              <Input
+                required
+                value={shipLine1}
+                onChange={(e) => setShipLine1(e.target.value)}
+              />
+            </Field>
+            <Field label="Address line 2" hint="Optional">
+              <Input
+                value={shipLine2}
+                onChange={(e) => setShipLine2(e.target.value)}
+              />
+            </Field>
+            <Field label="City">
+              <Input
+                required
+                value={shipCity}
+                onChange={(e) => setShipCity(e.target.value)}
+              />
+            </Field>
+            <Field label="State">
+              <Input
+                required
+                value={shipState}
+                onChange={(e) => setShipState(e.target.value)}
+              />
+            </Field>
+          </div>
+
+          {savedAddrID === "" && (
+            <div className="rounded-md border border-dashed border-border bg-bg/30 p-3">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={saveToBook}
+                  onChange={(e) => setSaveToBook(e.target.checked)}
+                  className="h-4 w-4 rounded border-border text-accent focus:ring-accent"
+                />
+                Save this to my address book for next time
+              </label>
+              {saveToBook && (
+                <div className="mt-2">
+                  <Field label="Label" hint="e.g. Mom's home, Bangalore office">
+                    <Input
+                      required
+                      placeholder="Home"
+                      value={addrLabel}
+                      onChange={(e) => setAddrLabel(e.target.value)}
+                    />
+                  </Field>
+                </div>
+              )}
+            </div>
+          )}
         </CardBody>
       </Card>
 
