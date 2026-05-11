@@ -24,6 +24,11 @@ type Service interface {
 	// GetByAWB returns a shipment by AWB number.
 	GetByAWB(ctx context.Context, awb string) (Shipment, error)
 
+	// GetByOrderID returns the (latest) shipment for an order. Used by the
+	// order detail page to surface tracking after a page reload, since the
+	// frontend only has the order ID in its URL.
+	GetByOrderID(ctx context.Context, sellerID core.SellerID, orderID core.OrderID) (Shipment, error)
+
 	// Cancel cancels a booked shipment with the carrier.
 	Cancel(ctx context.Context, sellerID core.SellerID, id core.ShipmentID, reason string) error
 

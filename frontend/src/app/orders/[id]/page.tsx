@@ -39,14 +39,29 @@ function Inner() {
   }, [loadOrder]);
 
   // If the order is already booked when the page loads (e.g. user revisits
-  // after creating + booking), pull any existing tracking events so the
-  // timeline renders without requiring a manual refresh click.
+  // after creating + booking earlier), look up the shipment so the Refresh
+  // button has something to call and any prior events render automatically.
   React.useEffect(() => {
-    if (!order?.awb_number) return;
-    // We don't have the shipment ID from the order record alone — best we
-    // can do is show the AWB and let the user click refresh. A future
-    // change should add /v1/orders/{id}/shipment so we can wire this up.
-  }, [order?.awb_number]);
+    if (!order?.awb_number || shipment) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const sh = await ordersApi.shipment(order.id);
+        if (cancelled) return;
+        setShipment(sh);
+        const evs = (await shipmentsApi.listEvents(sh.ID)) || [];
+        if (cancelled) return;
+        setEvents(evs);
+      } catch {
+        // Silent — if no shipment exists yet the page falls back to the
+        // standalone AWB header and the user can still click Refresh once
+        // they re-book.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [order?.awb_number, order?.id, shipment]);
 
   async function book() {
     setBooking(true);
@@ -72,6 +87,9 @@ function Inner() {
     try {
       const evs = (await shipmentsApi.refresh(shipment.ID)) || [];
       setEvents(evs);
+      // The poll may have advanced the order state via shipment transitions;
+      // re-load so the header badge + CTAs reflect the new state.
+      loadOrder();
     } catch (e) {
       setTrackErr((e as { message?: string }).message || "Failed to refresh");
     } finally {

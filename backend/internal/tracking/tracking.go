@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sort"
 	"time"
 
 	"github.com/google/uuid"
@@ -35,6 +36,10 @@ const (
 	StatusRTODeliv   CanonicalStatus = "rto_delivered"
 	StatusException  CanonicalStatus = "exception"
 	StatusPending    CanonicalStatus = "pending"
+	// Manifested = label generated, awaiting first carrier scan. Distinct
+	// from picked_up (which means actual pickup happened) and exception
+	// (which previously absorbed it and surfaced confusing UI labels).
+	StatusManifested CanonicalStatus = "manifested"
 )
 
 // Event is one normalised tracking event.
@@ -180,7 +185,7 @@ func (s *service) SchedulePoll(ctx context.Context, sellerID core.SellerID, ship
 }
 
 const shipmentAWBLookupSQL = `
-    SELECT COALESCE(awb,''), COALESCE(carrier_code,'')
+    SELECT COALESCE(awb,''), COALESCE(carrier_code,''), state
     FROM shipment WHERE id = $1 AND seller_id = $2
 `
 
@@ -193,10 +198,10 @@ func (s *service) PollNow(ctx context.Context, sellerID core.SellerID, shipmentI
 	}
 	// RLS-scoped read: shipment is owned by a seller, so we set the seller
 	// context on the tx before SELECTing or the policy filters every row.
-	var awb, carrierCode string
+	var awb, carrierCode, currentState string
 	if err := dbtx.WithReadOnlyTx(ctx, s.pool, sellerID, func(ctx context.Context, tx pgx.Tx) error {
 		return tx.QueryRow(ctx, shipmentAWBLookupSQL, shipmentID.UUID(), sellerID.UUID()).
-			Scan(&awb, &carrierCode)
+			Scan(&awb, &carrierCode, &currentState)
 	}); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return core.ErrNotFound
@@ -216,11 +221,20 @@ func (s *service) PollNow(ctx context.Context, sellerID core.SellerID, shipmentI
 	if res.Err != nil {
 		return fmt.Errorf("tracking.PollNow: carrier: %w", res.Err)
 	}
+	// Sort events oldest-first so applyTransition sees them chronologically.
+	// The adapter doesn't guarantee order and we mutate `currentState` as we
+	// walk; out-of-order events would let "delivered" run before "in_transit".
+	sortedEvents := make([]carriers.TrackingEvent, len(res.Value))
+	copy(sortedEvents, res.Value)
+	sort.Slice(sortedEvents, func(i, j int) bool {
+		return sortedEvents[i].Timestamp.Before(sortedEvents[j].Timestamp)
+	})
+
 	// Insert events under a seller-scoped tx so RLS lets them land. We bypass
 	// IngestEvents (which looks the shipment up by AWB without a scope) since
 	// we already know the seller_id + shipment_id here.
-	return dbtx.WithSellerTx(ctx, s.pool, sellerID, func(ctx context.Context, tx pgx.Tx) error {
-		for _, e := range res.Value {
+	if err := dbtx.WithSellerTx(ctx, s.pool, sellerID, func(ctx context.Context, tx pgx.Tx) error {
+		for _, e := range sortedEvents {
 			canonical := normalise(e.CarrierCode, e.StatusCode, e.Status)
 			dedupeKey := dedupeHash(e.CarrierCode, e.AWBNumber, e.StatusCode, e.Timestamp)
 			rawJSON, _ := json.Marshal(map[string]any{
@@ -238,7 +252,43 @@ func (s *service) PollNow(ctx context.Context, sellerID core.SellerID, shipmentI
 			}
 		}
 		return nil
-	})
+	}); err != nil {
+		return err
+	}
+
+	// Apply state transitions outside the insert tx — each Mark call manages
+	// its own seller-scoped tx and we want partial failure isolation (an event
+	// already in DB shouldn't roll back because the transition is illegal).
+	for _, e := range sortedEvents {
+		canonical := normalise(e.CarrierCode, e.StatusCode, e.Status)
+		s.applyTransition(ctx, sellerID, shipmentID, canonical, currentState, e)
+		// applyTransition uses currentState to decide whether a transition is
+		// valid; refresh it from the most-likely post-event state so chained
+		// events in one poll progress correctly.
+		currentState = nextProbableState(currentState, canonical)
+	}
+	return nil
+}
+
+// nextProbableState predicts the post-transition shipment state so a single
+// poll containing multiple events can chain transitions (e.g. picked_up
+// then delivered in one batch). Mirrors the rules in applyTransition.
+func nextProbableState(current string, c CanonicalStatus) string {
+	switch c {
+	case StatusPickedUp, StatusInTransit, StatusOutForDel:
+		if current == "booked" {
+			return "in_transit"
+		}
+	case StatusDelivered:
+		if current == "in_transit" {
+			return "delivered"
+		}
+	case StatusRTO:
+		return "rto_in_progress"
+	case StatusRTODeliv:
+		return "rto_completed"
+	}
+	return current
 }
 
 const listEventsSQL = `
@@ -290,8 +340,10 @@ func normalise(carrierCode, statusCode, statusText string) CanonicalStatus {
 		return StatusOutForDel
 	case "PKP", "PU", "PKPU", "Picked Up":
 		return StatusPickedUp
-	case "IT", "IN-SCAN", "In Transit":
+	case "IT", "IN-SCAN", "In Transit", "TIN":
 		return StatusInTransit
+	case "MAN", "MFT", "Manifested":
+		return StatusManifested
 	case "RTO", "RTO-INIT", "RTN":
 		return StatusRTO
 	case "RTO-DL", "RTN-DL":
@@ -307,6 +359,8 @@ func normalise(carrierCode, statusCode, statusText string) CanonicalStatus {
 		return StatusPickedUp
 	case contains(statusText, "in transit", "intransit"):
 		return StatusInTransit
+	case contains(statusText, "manifested", "manifest"):
+		return StatusManifested
 	case contains(statusText, "rto"):
 		return StatusRTO
 	}

@@ -133,8 +133,9 @@ func NewAppRouter(deps AppDeps, requestTimeout time.Duration) chi.Router {
 					BuyerAddress: deps.BuyerAddress,
 				})
 				handlers.MountOrders(r, handlers.OrdersDeps{
-					Orders: deps.Orders,
-					Limits: deps.Limits,
+					Orders:    deps.Orders,
+					Limits:    deps.Limits,
+					Shipments: deps.Shipments,
 				})
 				handlers.MountPricing(r, handlers.PricingDeps{Engine: deps.Pricing})
 				handlers.MountShipments(r, handlers.ShipmentDeps{

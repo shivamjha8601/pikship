@@ -241,6 +241,29 @@ func (s *service) Get(ctx context.Context, sellerID core.SellerID, id core.Shipm
 	return out, err
 }
 
+func (s *service) GetByOrderID(ctx context.Context, sellerID core.SellerID, orderID core.OrderID) (Shipment, error) {
+	var out Shipment
+	err := dbtx.WithReadOnlyTx(ctx, s.pool, sellerID, func(ctx context.Context, tx pgx.Tx) error {
+		sh, err := scanShipment(tx.QueryRow(ctx, `
+            SELECT id, seller_id, order_id, allocation_decision_id, state,
+                   carrier_code, service_type, COALESCE(awb,''), COALESCE(carrier_shipment_id,''),
+                   estimated_delivery_at, booked_at,
+                   charges_paise, cod_amount_paise,
+                   pickup_location_id, pickup_address_snapshot, drop_address_snapshot,
+                   drop_pincode, package_weight_g, package_length_mm, package_width_mm, package_height_mm,
+                   COALESCE(last_carrier_error,''), attempt_count, created_at, updated_at
+            FROM shipment WHERE order_id = $1 AND seller_id = $2
+            ORDER BY created_at DESC LIMIT 1`,
+			orderID.UUID(), sellerID.UUID()))
+		if err != nil {
+			return err
+		}
+		out = sh
+		return nil
+	})
+	return out, err
+}
+
 // GetByAWB is unscoped (carriers webhook in by AWB) — must use admin/reports
 // pool by caller. We use the app pool here without seller scope only for v0;
 // production should route this via a dedicated reports-pool-backed service.
@@ -354,11 +377,47 @@ func (s *service) Cancel(ctx context.Context, sellerID core.SellerID, id core.Sh
 }
 
 func (s *service) MarkInTransit(ctx context.Context, sellerID core.SellerID, id core.ShipmentID) error {
-	return s.transition(ctx, sellerID, id, StateBooked, StateInTransit, "in_transit")
+	if err := s.transition(ctx, sellerID, id, StateBooked, StateInTransit, "in_transit"); err != nil {
+		return err
+	}
+	s.fanoutOrderTransition(ctx, sellerID, id, "in_transit")
+	return nil
 }
 
 func (s *service) MarkDelivered(ctx context.Context, sellerID core.SellerID, id core.ShipmentID, _ time.Time) error {
-	return s.transition(ctx, sellerID, id, StateInTransit, StateDelivered, "delivered")
+	if err := s.transition(ctx, sellerID, id, StateInTransit, StateDelivered, "delivered"); err != nil {
+		return err
+	}
+	s.fanoutOrderTransition(ctx, sellerID, id, "delivered")
+	return nil
+}
+
+// fanoutOrderTransition mirrors a shipment state change to the matching
+// order state. Best-effort: if the order state machine refuses (e.g.
+// already past this state), we log + continue rather than rolling back
+// the shipment transition.
+func (s *service) fanoutOrderTransition(ctx context.Context, sellerID core.SellerID, shipmentID core.ShipmentID, to string) {
+	sh, err := s.Get(ctx, sellerID, shipmentID)
+	if err != nil {
+		s.log.WarnContext(ctx, "fanoutOrderTransition: get shipment failed",
+			slog.String("shipment_id", shipmentID.String()), slog.String("err", err.Error()))
+		return
+	}
+	var orderErr error
+	switch to {
+	case "in_transit":
+		orderErr = s.orders.MarkInTransit(ctx, sellerID, sh.OrderID)
+	case "delivered":
+		orderErr = s.orders.MarkDelivered(ctx, sellerID, sh.OrderID)
+	case "rto":
+		orderErr = s.orders.MarkRTO(ctx, sellerID, sh.OrderID, "carrier_rto")
+	}
+	if orderErr != nil {
+		s.log.WarnContext(ctx, "fanoutOrderTransition: order mark failed",
+			slog.String("order_id", sh.OrderID.String()),
+			slog.String("to", to),
+			slog.String("err", orderErr.Error()))
+	}
 }
 
 func (s *service) MarkRTO(ctx context.Context, sellerID core.SellerID, id core.ShipmentID, reason string) error {

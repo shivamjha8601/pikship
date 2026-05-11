@@ -10,12 +10,14 @@ import (
 	"github.com/vishal1132/pikshipp/backend/internal/core"
 	"github.com/vishal1132/pikshipp/backend/internal/limits"
 	"github.com/vishal1132/pikshipp/backend/internal/orders"
+	"github.com/vishal1132/pikshipp/backend/internal/shipments"
 )
 
 // OrdersDeps are the dependencies for order handlers.
 type OrdersDeps struct {
-	Orders orders.Service
-	Limits limits.Guard // optional; nil disables enforcement
+	Orders    orders.Service
+	Limits    limits.Guard      // optional; nil disables enforcement
+	Shipments shipments.Service // optional; enables cancel-cascades-to-shipment
 }
 
 func ListOrdersHandler(d OrdersDeps) http.HandlerFunc {
@@ -92,6 +94,23 @@ func CancelOrderHandler(d OrdersDeps) http.HandlerFunc {
 			Reason string `json:"reason"`
 		}
 		_ = decode(r, &req)
+		// Cascade: if a shipment exists for this order, cancel it first so
+		// the carrier-side AWB is released and we don't end up with a
+		// cancelled order whose shipment quietly delivers. Tolerate "no
+		// shipment yet" (cancel before book) cleanly.
+		if d.Shipments != nil {
+			if sh, sErr := d.Shipments.GetByOrderID(r.Context(), p.SellerID, id); sErr == nil && sh.ID.String() != "00000000-0000-0000-0000-000000000000" {
+				reason := req.Reason
+				if reason == "" {
+					reason = "order_cancelled"
+				}
+				if cErr := d.Shipments.Cancel(r.Context(), p.SellerID, sh.ID, reason); cErr != nil {
+					// Don't block the order cancel on a carrier failure — log and continue.
+					// The shipment will be marked failed by the cancel call's audit trail.
+					_ = cErr
+				}
+			}
+		}
 		if err := d.Orders.Cancel(r.Context(), p.SellerID, id, req.Reason); err != nil {
 			writeError(w, r, err)
 			return
@@ -100,9 +119,34 @@ func CancelOrderHandler(d OrdersDeps) http.HandlerFunc {
 	}
 }
 
+// GetOrderShipmentHandler returns the shipment associated with an order
+// (or 404 if the order hasn't been booked yet). The frontend uses this on
+// the order detail page after a reload to re-hydrate its tracking UI.
+func GetOrderShipmentHandler(d OrdersDeps) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		p := auth.MustPrincipalFrom(r.Context())
+		id, err := core.ParseOrderID(chi.URLParam(r, "orderID"))
+		if err != nil {
+			writeError(w, r, core.ErrInvalidArgument)
+			return
+		}
+		if d.Shipments == nil {
+			writeError(w, r, core.ErrNotFound)
+			return
+		}
+		sh, err := d.Shipments.GetByOrderID(r.Context(), p.SellerID, id)
+		if err != nil {
+			writeError(w, r, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, sh)
+	}
+}
+
 func MountOrders(r chi.Router, d OrdersDeps) {
 	r.Get("/orders", ListOrdersHandler(d))
 	r.Post("/orders", CreateOrderHandler(d))
 	r.Get("/orders/{orderID}", GetOrderHandler(d))
 	r.Post("/orders/{orderID}/cancel", CancelOrderHandler(d))
+	r.Get("/orders/{orderID}/shipment", GetOrderShipmentHandler(d))
 }

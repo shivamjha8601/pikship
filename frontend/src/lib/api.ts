@@ -317,6 +317,7 @@ export const ordersApi = {
   cancel: (id: string, reason: string) =>
     api.post<{ status: string }>(`/v1/orders/${id}/cancel`, { reason }),
   book: (id: string) => api.post<Shipment>(`/v1/orders/${id}/book`),
+  shipment: (id: string) => api.get<Shipment>(`/v1/orders/${id}/shipment`),
 };
 
 export type Shipment = {
