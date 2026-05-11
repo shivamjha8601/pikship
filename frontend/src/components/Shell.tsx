@@ -14,7 +14,6 @@ import {
 } from "lucide-react";
 import { useSession } from "@/lib/session";
 import { cn } from "@/lib/cn";
-import { Menu, MenuItem, MenuSeparator } from "@/components/ui/Menu";
 
 const NAV = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -124,46 +123,24 @@ export function Shell({ children }: { children: React.ReactNode }) {
             </div>
           </div>
 
-          <Menu
-            trigger={({ onClick, ref, open }) => (
-              <button
-                ref={ref}
-                onClick={onClick}
-                aria-haspopup="menu"
-                aria-expanded={open}
-                className="flex items-center gap-3 rounded-md px-2 py-1 hover:bg-bg"
-              >
-                <div className="hidden text-right sm:block">
-                  <div className="text-sm font-medium leading-tight">
-                    {user.name || user.email}
-                  </div>
-                  <div className="text-xs text-muted">{user.email}</div>
-                </div>
-                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-accent/10 text-sm font-medium text-accent">
-                  {initials}
-                </div>
-              </button>
+          <Link
+            href="/account"
+            aria-label="Account"
+            className={cn(
+              "flex items-center gap-3 rounded-md px-2 py-1 hover:bg-bg",
+              path.startsWith("/account") && "bg-bg",
             )}
           >
-            {(close) => (
-              <>
-                <div className="px-3 py-2 text-xs text-muted">
-                  Signed in as
-                  <div className="mt-0.5 truncate text-sm font-medium text-text">
-                    {user.email}
-                  </div>
-                </div>
-                <MenuSeparator />
-                <MenuItem
-                  destructive
-                  onClick={() => { close(); logout(); }}
-                >
-                  <LogOut className="h-4 w-4" />
-                  Sign out
-                </MenuItem>
-              </>
-            )}
-          </Menu>
+            <div className="hidden text-right sm:block">
+              <div className="text-sm font-medium leading-tight">
+                {user.name || user.email}
+              </div>
+              <div className="text-xs text-muted">{user.email}</div>
+            </div>
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-accent/10 text-sm font-medium text-accent">
+              {initials}
+            </div>
+          </Link>
         </header>
         <main className="flex-1 px-4 py-6 md:px-6 md:py-8">{children}</main>
       </div>

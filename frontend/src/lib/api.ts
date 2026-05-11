@@ -127,6 +127,26 @@ export type Address = {
   pincode: string;
 };
 
+export type BuyerAddress = {
+  id: string;
+  seller_id: string;
+  label: string;
+  buyer_name: string;
+  buyer_phone: string;
+  buyer_email?: string;
+  address: Address;
+  pincode: string;
+  state: string;
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type BuyerAddressInput = Omit<
+  BuyerAddress,
+  "id" | "seller_id" | "created_at" | "updated_at"
+>;
+
 export type PickupLocation = {
   id: string;
   seller_id: string;
@@ -278,6 +298,15 @@ export const catalogApi = {
   listPickups: () => api.get<PickupLocation[]>("/v1/pickup-locations"),
   createPickup: (input: Omit<PickupLocation, "id" | "seller_id" | "created_at" | "updated_at">) =>
     api.post<PickupLocation>("/v1/pickup-locations", input),
+
+  listBuyerAddresses: () => api.get<BuyerAddress[]>("/v1/buyer-addresses"),
+  createBuyerAddress: (input: BuyerAddressInput) =>
+    api.post<BuyerAddress>("/v1/buyer-addresses", input),
+  updateBuyerAddress: (id: string, patch: Partial<BuyerAddressInput>) =>
+    api.patch<BuyerAddress>(`/v1/buyer-addresses/${id}`, patch),
+  deleteBuyerAddress: (id: string) => api.del<void>(`/v1/buyer-addresses/${id}`),
+  setDefaultBuyerAddress: (id: string) =>
+    api.post<void>(`/v1/buyer-addresses/${id}/default`),
 };
 
 export const ordersApi = {
