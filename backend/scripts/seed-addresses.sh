@@ -39,10 +39,14 @@ INSERT INTO pickup_location
   (seller_id, label, contact_name, contact_phone, contact_email,
    address, pincode, state, pickup_hours, gstin, active, is_default)
 VALUES
+  -- All seeded warehouses go in as non-default to avoid clashing with the
+  -- seller's existing default (the partial unique index on (seller_id)
+  -- WHERE is_default=true would skip a conflicting row). If the seller has
+  -- no default yet, they can promote one via the UI.
   (:seller_uuid::uuid, 'Bangalore HQ', 'Ravi Kumar', '+919800000001',
    'ops-bangalore@example.com',
    '{"line1":"1st Floor, 23 Church Street","city":"Bangalore","state":"KA","country":"IN","pincode":"560001"}'::jsonb,
-   '560001', 'KA', '10:00-19:00', '29AABCU9603R1ZX', true, true),
+   '560001', 'KA', '10:00-19:00', '29AABCU9603R1ZX', true, false),
   (:seller_uuid::uuid, 'Mumbai backup', 'Priya Shah', '+919800000002',
    'ops-mumbai@example.com',
    '{"line1":"Unit 5, Andheri Industrial Estate","city":"Mumbai","state":"MH","country":"IN","pincode":"400053"}'::jsonb,
@@ -57,7 +61,7 @@ VALUES
   (:seller_uuid::uuid, 'Asha (Mumbai)', 'Asha Sharma', '+919876543210',
    'asha@example.com',
    '{"line1":"12 Park Street","line2":"Apt 4B","city":"Mumbai","state":"MH","country":"IN","pincode":"400001"}'::jsonb,
-   '400001', 'MH', true),
+   '400001', 'MH', false),
   (:seller_uuid::uuid, 'Rohit (Delhi)', 'Rohit Verma', '+919812345678',
    'rohit@example.com',
    '{"line1":"5 MG Road","city":"New Delhi","state":"DL","country":"IN","pincode":"110001"}'::jsonb,
