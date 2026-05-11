@@ -5,9 +5,9 @@ import Link from "next/link";
 import { Shell } from "@/components/Shell";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { ordersApi, paiseToRupees, type Order } from "@/lib/api";
+import { ordersApi, paiseToRupees, shipmentsApi, type Order, type Shipment, type TrackingEvent } from "@/lib/api";
 import { OrderStateBadge } from "@/components/OrderStateBadge";
-import { ArrowLeft, IndianRupee } from "lucide-react";
+import { ArrowLeft, IndianRupee, RefreshCw, Send, Truck } from "lucide-react";
 import { LinkButton } from "@/components/ui/Button";
 
 export default function OrderDetailPage() {
@@ -21,10 +21,63 @@ function Inner() {
   const [order, setOrder] = React.useState<Order | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [cancelling, setCancelling] = React.useState(false);
+  const [booking, setBooking] = React.useState(false);
+  const [bookErr, setBookErr] = React.useState<string | null>(null);
+  const [shipment, setShipment] = React.useState<Shipment | null>(null);
+  const [events, setEvents] = React.useState<TrackingEvent[]>([]);
+  const [refreshing, setRefreshing] = React.useState(false);
+  const [trackErr, setTrackErr] = React.useState<string | null>(null);
+
+  const loadOrder = React.useCallback(() => {
+    ordersApi.get(id).then(setOrder).catch((e) =>
+      setError((e as { message?: string }).message || "Not found"),
+    );
+  }, [id]);
 
   React.useEffect(() => {
-    ordersApi.get(id).then(setOrder).catch((e) => setError((e as { message?: string }).message || "Not found"));
-  }, [id]);
+    loadOrder();
+  }, [loadOrder]);
+
+  // If the order is already booked when the page loads (e.g. user revisits
+  // after creating + booking), pull any existing tracking events so the
+  // timeline renders without requiring a manual refresh click.
+  React.useEffect(() => {
+    if (!order?.awb_number) return;
+    // We don't have the shipment ID from the order record alone — best we
+    // can do is show the AWB and let the user click refresh. A future
+    // change should add /v1/orders/{id}/shipment so we can wire this up.
+  }, [order?.awb_number]);
+
+  async function book() {
+    setBooking(true);
+    setBookErr(null);
+    try {
+      const ship = await ordersApi.book(id);
+      setShipment(ship);
+      loadOrder();
+      // Auto-pull initial tracking events.
+      const evs = (await shipmentsApi.refresh(ship.ID)) || [];
+      setEvents(evs);
+    } catch (e) {
+      setBookErr((e as { message?: string }).message || "Failed to book");
+    } finally {
+      setBooking(false);
+    }
+  }
+
+  async function refreshTracking() {
+    if (!shipment) return;
+    setRefreshing(true);
+    setTrackErr(null);
+    try {
+      const evs = (await shipmentsApi.refresh(shipment.ID)) || [];
+      setEvents(evs);
+    } catch (e) {
+      setTrackErr((e as { message?: string }).message || "Failed to refresh");
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   async function cancel() {
     if (!order) return;
@@ -80,6 +133,11 @@ function Inner() {
                 <IndianRupee className="h-4 w-4" /> Pay {paiseToRupees(order.total_paise)}
               </LinkButton>
             )}
+          {!order.awb_number && ["draft", "ready"].includes(order.state) && (
+            <Button onClick={book} loading={booking}>
+              <Send className="h-4 w-4" /> Book shipment
+            </Button>
+          )}
           {cancellable && (
             <Button variant="danger" loading={cancelling} onClick={cancel}>Cancel order</Button>
           )}
@@ -156,6 +214,59 @@ function Inner() {
           </Card>
         </div>
       </div>
+
+      {bookErr && (
+        <div className="rounded-md border border-danger/20 bg-danger/5 px-4 py-3 text-sm text-danger">
+          {bookErr}
+        </div>
+      )}
+
+      {(shipment || order.awb_number) && (
+        <Card>
+          <CardHeader className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Truck className="h-4 w-4 text-muted" />
+                Tracking
+              </CardTitle>
+              <p className="mt-1 text-xs text-muted">
+                AWB <span className="font-mono">{shipment?.AWB || order.awb_number}</span> · refresh to pull latest from the carrier
+              </p>
+            </div>
+            <Button size="sm" variant="secondary" onClick={refreshTracking} loading={refreshing}>
+              <RefreshCw className="h-4 w-4" /> Refresh
+            </Button>
+          </CardHeader>
+          <CardBody>
+            {trackErr && <p className="mb-3 text-sm text-danger">{trackErr}</p>}
+            {events.length === 0 ? (
+              <p className="text-sm text-muted">
+                No tracking events yet. Click <strong>Refresh</strong> to pull
+                from the carrier.
+              </p>
+            ) : (
+              <ol className="relative space-y-3 border-l border-border pl-5">
+                {events.map((e, i) => (
+                  <li key={`${e.AWB}-${e.OccurredAt}-${i}`} className="relative">
+                    <span
+                      className={
+                        "absolute -left-[26px] top-1 h-3 w-3 rounded-full border-2 border-surface " +
+                        (i === 0 ? "bg-accent" : "bg-muted")
+                      }
+                    />
+                    <div className="text-sm font-medium">{e.RawStatus}</div>
+                    <div className="text-xs text-muted">
+                      {new Date(e.OccurredAt).toLocaleString()}
+                      {e.Location && ` · ${e.Location}`}
+                      {e.CanonicalStatus && ` · ${e.CanonicalStatus}`}
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </CardBody>
+        </Card>
+      )}
     </div>
   );
 }

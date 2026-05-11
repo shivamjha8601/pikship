@@ -19,6 +19,7 @@ import (
 
 	"github.com/vishal1132/pikshipp/backend/internal/carriers"
 	"github.com/vishal1132/pikshipp/backend/internal/core"
+	"github.com/vishal1132/pikshipp/backend/internal/observability/dbtx"
 	"github.com/vishal1132/pikshipp/backend/internal/shipments"
 )
 
@@ -58,6 +59,11 @@ type Service interface {
 
 	// SchedulePoll registers a shipment for periodic polling.
 	SchedulePoll(ctx context.Context, sellerID core.SellerID, shipmentID core.ShipmentID, awb, carrierCode string) error
+
+	// PollNow does a one-shot manual poll of the carrier for this shipment
+	// and ingests any new events. Used by the UI's "refresh tracking" action
+	// and by tests; periodic polling normally runs out of the worker.
+	PollNow(ctx context.Context, sellerID core.SellerID, shipmentID core.ShipmentID) error
 
 	// ListEventsByShipment returns all events for a shipment, newest first.
 	ListEventsByShipment(ctx context.Context, sellerID core.SellerID, shipmentID core.ShipmentID) ([]Event, error)
@@ -173,6 +179,68 @@ func (s *service) SchedulePoll(ctx context.Context, sellerID core.SellerID, ship
 	return err
 }
 
+const shipmentAWBLookupSQL = `
+    SELECT COALESCE(awb,''), COALESCE(carrier_code,'')
+    FROM shipment WHERE id = $1 AND seller_id = $2
+`
+
+// PollNow queries the carrier adapter for fresh tracking events and ingests
+// them. Returns an error if the shipment has no AWB yet (i.e. not booked)
+// or if no adapter is registered for the carrier.
+func (s *service) PollNow(ctx context.Context, sellerID core.SellerID, shipmentID core.ShipmentID) error {
+	if s.registry == nil {
+		return fmt.Errorf("tracking.PollNow: no carrier registry configured")
+	}
+	// RLS-scoped read: shipment is owned by a seller, so we set the seller
+	// context on the tx before SELECTing or the policy filters every row.
+	var awb, carrierCode string
+	if err := dbtx.WithReadOnlyTx(ctx, s.pool, sellerID, func(ctx context.Context, tx pgx.Tx) error {
+		return tx.QueryRow(ctx, shipmentAWBLookupSQL, shipmentID.UUID(), sellerID.UUID()).
+			Scan(&awb, &carrierCode)
+	}); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return core.ErrNotFound
+		}
+		return fmt.Errorf("tracking.PollNow: lookup: %w", err)
+	}
+	if awb == "" {
+		return fmt.Errorf("tracking.PollNow: shipment has no AWB yet: %w", core.ErrInvalidArgument)
+	}
+	adapter, ok := s.registry.Get(carrierCode)
+	if !ok {
+		return fmt.Errorf("tracking.PollNow: no adapter for carrier %q", carrierCode)
+	}
+	// Fetch events since the start of the epoch — the insert dedupes via
+	// the (carrier, awb, status, ts) hash, so re-pulling old events is cheap.
+	res := adapter.FetchTrackingEvents(ctx, awb, time.Time{})
+	if res.Err != nil {
+		return fmt.Errorf("tracking.PollNow: carrier: %w", res.Err)
+	}
+	// Insert events under a seller-scoped tx so RLS lets them land. We bypass
+	// IngestEvents (which looks the shipment up by AWB without a scope) since
+	// we already know the seller_id + shipment_id here.
+	return dbtx.WithSellerTx(ctx, s.pool, sellerID, func(ctx context.Context, tx pgx.Tx) error {
+		for _, e := range res.Value {
+			canonical := normalise(e.CarrierCode, e.StatusCode, e.Status)
+			dedupeKey := dedupeHash(e.CarrierCode, e.AWBNumber, e.StatusCode, e.Timestamp)
+			rawJSON, _ := json.Marshal(map[string]any{
+				"status":   e.Status,
+				"code":     e.StatusCode,
+				"location": e.Location,
+				"remarks":  e.Remarks,
+			})
+			if _, err := tx.Exec(ctx, insertEventSQL,
+				shipmentID.UUID(), sellerID.UUID(), e.CarrierCode, e.AWBNumber,
+				e.Status, string(canonical), e.Location, e.Timestamp,
+				"poll", rawJSON, dedupeKey,
+			); err != nil {
+				return fmt.Errorf("tracking.PollNow: insert: %w", err)
+			}
+		}
+		return nil
+	})
+}
+
 const listEventsSQL = `
     SELECT carrier_code, awb, raw_status, canonical_status,
            COALESCE(location,''), occurred_at, source, raw_payload
@@ -183,28 +251,30 @@ const listEventsSQL = `
 `
 
 func (s *service) ListEventsByShipment(ctx context.Context, sellerID core.SellerID, shipmentID core.ShipmentID) ([]Event, error) {
-	rows, err := s.pool.Query(ctx, listEventsSQL, shipmentID.UUID(), sellerID.UUID())
-	if err != nil {
-		return nil, fmt.Errorf("tracking.ListEvents: %w", err)
-	}
-	defer rows.Close()
-
 	var out []Event
-	for rows.Next() {
-		var ev Event
-		var rawJSON []byte
-		var canonical string
-		ev.ShipmentID = shipmentID
-		ev.SellerID = sellerID
-		if err := rows.Scan(&ev.CarrierCode, &ev.AWB, &ev.RawStatus, &canonical,
-			&ev.Location, &ev.OccurredAt, &ev.Source, &rawJSON); err != nil {
-			return nil, err
+	err := dbtx.WithReadOnlyTx(ctx, s.pool, sellerID, func(ctx context.Context, tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, listEventsSQL, shipmentID.UUID(), sellerID.UUID())
+		if err != nil {
+			return fmt.Errorf("tracking.ListEvents: %w", err)
 		}
-		ev.CanonicalStatus = CanonicalStatus(canonical)
-		_ = json.Unmarshal(rawJSON, &ev.RawPayload)
-		out = append(out, ev)
-	}
-	return out, rows.Err()
+		defer rows.Close()
+		for rows.Next() {
+			var ev Event
+			var rawJSON []byte
+			var canonical string
+			ev.ShipmentID = shipmentID
+			ev.SellerID = sellerID
+			if err := rows.Scan(&ev.CarrierCode, &ev.AWB, &ev.RawStatus, &canonical,
+				&ev.Location, &ev.OccurredAt, &ev.Source, &rawJSON); err != nil {
+				return err
+			}
+			ev.CanonicalStatus = CanonicalStatus(canonical)
+			_ = json.Unmarshal(rawJSON, &ev.RawPayload)
+			out = append(out, ev)
+		}
+		return rows.Err()
+	})
+	return out, err
 }
 
 // --- normalisation ---

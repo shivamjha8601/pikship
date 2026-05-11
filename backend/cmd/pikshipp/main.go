@@ -20,9 +20,12 @@ import (
 	httpapi "github.com/vishal1132/pikshipp/backend/api/http"
 	"github.com/vishal1132/pikshipp/backend/api/http/handlers"
 	"github.com/vishal1132/pikshipp/backend/internal/adapters/googleoauth"
+	"github.com/vishal1132/pikshipp/backend/internal/allocation"
 	"github.com/vishal1132/pikshipp/backend/internal/audit"
 	"github.com/vishal1132/pikshipp/backend/internal/auth"
 	"github.com/vishal1132/pikshipp/backend/internal/buyerexp"
+	"github.com/vishal1132/pikshipp/backend/internal/carriers"
+	"github.com/vishal1132/pikshipp/backend/internal/carriers/delhivery"
 	"github.com/vishal1132/pikshipp/backend/internal/catalog"
 	"github.com/vishal1132/pikshipp/backend/internal/config"
 	"github.com/vishal1132/pikshipp/backend/internal/contracts"
@@ -178,19 +181,41 @@ func run(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 	// Pricing engine — admin pool, reads rate cards across scopes.
 	pricingEngine := pricing.New(poolAdmin)
 
-	// Carriers registry — sandbox registered in dev; real adapters in prod.
-	// (Delhivery + others added by wiring code that reads carrier credentials
-	// from secrets.Store; omitted here until credentials are configured.)
+	// Carriers registry. Adapters are installed under their stable carrier
+	// UUID (not the human-readable code) because shipments.Book looks up
+	// adapters by CarrierID.String(). The wrapper below renames Code() so
+	// Install + Get agree on the key.
+	carrierReg := carriers.NewRegistry()
+	allocationEng := allocation.New(pricingEngine, policyEngine, log)
 
-	// Shipments (needs carriers registry — create a stub registry for now).
-	import_carriers := func() interface{} { return nil }
-	_ = import_carriers
-	// shipSvc := shipments.New(poolApp, carriersRegistry, walletSvc, orderSvc, log)
-	// For now serve without shipment booking until carrier keys are wired.
-	var shipSvc shipments.Service
+	if cfg.DelhiveryEnabled {
+		if cfg.DelhiveryAPIKey == "" {
+			return fmt.Errorf("delhivery: PIKSHIPP_DELHIVERY_API_KEY required when enabled")
+		}
+		baseAdapter := delhivery.New(delhivery.Config{
+			APIKey:     secrets.New(cfg.DelhiveryAPIKey),
+			ClientName: "pikshipp",
+			BaseURL:    cfg.DelhiveryBaseURL,
+		})
+		// Wrap so Code() returns the carrier UUID — shipments.Book looks up
+		// adapters by UUID, not by the human-readable "delhivery" code.
+		carrierReg.Install(&uuidNamedAdapter{
+			Adapter: baseAdapter,
+			code:    carriers.DelhiveryCarrierID.String(),
+		})
+		log.InfoContext(ctx, "delhivery adapter enabled",
+			slog.String("carrier_id", carriers.DelhiveryCarrierID.String()),
+			slog.String("base_url", cfg.DelhiveryBaseURL))
+	}
 
-	// Tracking.
-	trackingSvc := tracking.New(poolApp, shipSvc, nil, log)
+	// Shipments — needs carriers registry, wallet, orders. Only useful when
+	// at least one adapter is installed; without one, Book() will fail
+	// gracefully with "no adapter for carrier".
+	shipSvc := shipments.New(poolApp, carrierReg, walletSvc, orderSvc, log)
+
+	// Tracking — registry lets the service call FetchTrackingEvents on the
+	// right adapter when /shipments/{id}/refresh is called.
+	trackingSvc := tracking.New(poolApp, shipSvc, carrierReg, log)
 
 	// NDR + buyer experience.
 	ndrSvc := ndr.New(poolApp)
@@ -236,8 +261,9 @@ func run(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 			Pickup:       pickupSvc,
 			Product:      productSvc,
 			BuyerAddress: buyerAddrSvc,
-			Orders:    orderSvc,
-			Pricing:   pricingEngine,
+			Orders:     orderSvc,
+			Pricing:    pricingEngine,
+			Allocation: allocationEng,
 			Shipments: shipSvc,
 			Wallet:    walletSvc,
 			Tracking:  trackingSvc,
@@ -290,3 +316,14 @@ func stopFromError() {
 		_ = p.Signal(syscall.SIGTERM)
 	}
 }
+
+// uuidNamedAdapter overrides Code() on an existing carrier adapter so it
+// registers under a UUID string. shipments.Book looks up adapters by
+// CarrierID.String(), so each enabled adapter must be installed under its
+// stable UUID rather than its human-readable code.
+type uuidNamedAdapter struct {
+	carriers.Adapter
+	code string
+}
+
+func (u *uuidNamedAdapter) Code() string { return u.code }

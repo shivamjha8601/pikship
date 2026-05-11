@@ -108,13 +108,18 @@ var Definitions = []Definition{
 
 	// Carriers
 	{
+		// The allocation engine parses each member of this set as a carrier
+		// UUID — historical entries used human-readable codes ("delhivery"),
+		// but they silently dropped through ParseCarrierID and produced
+		// "no carriers available". Defaults are now UUIDs that match the
+		// constants in internal/carriers/ids.go.
 		Key: KeyCarriersAllowedSet, ValueType: TypeStringSet,
-		DefaultGlobal: StringSetValue(core.NewStringSet("delhivery", "dtdc", "ekart", "ecom_express")),
+		DefaultGlobal: StringSetValue(core.NewStringSet("d0d1f1e7-0000-4000-8000-000000000001")),
 		DefaultsByType: map[core.SellerType]Value{
-			core.SellerTypeMidMarket:  StringSetValue(core.NewStringSet("delhivery", "bluedart", "dtdc", "ekart", "xpressbees", "ecom_express", "shadowfax", "india_post")),
-			core.SellerTypeEnterprise: StringSetValue(core.NewStringSet("delhivery", "bluedart", "dtdc", "ekart", "xpressbees", "ecom_express", "shadowfax", "india_post")),
+			core.SellerTypeMidMarket:  StringSetValue(core.NewStringSet("d0d1f1e7-0000-4000-8000-000000000001")),
+			core.SellerTypeEnterprise: StringSetValue(core.NewStringSet("d0d1f1e7-0000-4000-8000-000000000001")),
 		},
-		Description: "Set of carrier IDs this seller can route to",
+		Description: "Set of carrier UUIDs this seller can route to",
 		RegisteredIn: "carriers", AddedInVersion: "v0",
 	},
 	{Key: KeyCarriersExcludedSet, ValueType: TypeStringSet, DefaultGlobal: StringSetValue(core.NewStringSet()), Description: "Carriers this seller has explicitly excluded", RegisteredIn: "carriers", AddedInVersion: "v0"},

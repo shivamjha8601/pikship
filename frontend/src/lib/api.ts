@@ -316,6 +316,41 @@ export const ordersApi = {
   get: (id: string) => api.get<Order>(`/v1/orders/${id}`),
   cancel: (id: string, reason: string) =>
     api.post<{ status: string }>(`/v1/orders/${id}/cancel`, { reason }),
+  book: (id: string) => api.post<Shipment>(`/v1/orders/${id}/book`),
+};
+
+export type Shipment = {
+  ID: string;
+  OrderID: string;
+  SellerID: string;
+  State: string;
+  CarrierCode: string;
+  ServiceType: string;
+  AWB: string;
+  CarrierShipmentID: string;
+  ChargesPaise: number;
+  CODAmountPaise: number;
+  BookedAt: string | null;
+};
+
+export type TrackingEvent = {
+  ShipmentID: string;
+  SellerID: string;
+  CarrierCode: string;
+  AWB: string;
+  RawStatus: string;
+  CanonicalStatus: string;
+  Location: string;
+  OccurredAt: string;
+  Source: string;
+  RawPayload?: Record<string, unknown>;
+};
+
+export const shipmentsApi = {
+  listEvents: (shipmentID: string) =>
+    api.get<TrackingEvent[] | null>(`/v1/shipments/${shipmentID}/tracking-events`),
+  refresh: (shipmentID: string) =>
+    api.post<TrackingEvent[] | null>(`/v1/shipments/${shipmentID}/refresh`),
 };
 
 export type PricingPackage = {

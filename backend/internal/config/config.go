@@ -60,6 +60,14 @@ type Config struct {
 	GoogleOAuthRedirectURI      string `env:"GOOGLE_OAUTH_REDIRECT_URI"       envDefault:""`
 	GoogleOAuthFrontendReturnURL string `env:"GOOGLE_OAUTH_FRONTEND_RETURN_URL" envDefault:""`
 
+	// Delhivery adapter — when DelhiveryEnabled is true, the carriers
+	// registry installs the Delhivery adapter (real or mock depending on
+	// BaseURL) and shipment booking goes live. Leave disabled until
+	// credentials are wired in prod.
+	DelhiveryEnabled bool   `env:"DELHIVERY_ENABLED" envDefault:"false"`
+	DelhiveryBaseURL string `env:"DELHIVERY_BASE_URL" envDefault:""`
+	DelhiveryAPIKey  string `env:"DELHIVERY_API_KEY" envDefault:""`
+
 	// Sentry — when DSN is empty Sentry is disabled (no init, no overhead).
 	SentryDSN              string  `env:"SENTRY_DSN"                envDefault:""`
 	SentryEnvironment      string  `env:"SENTRY_ENVIRONMENT"        envDefault:"production"`

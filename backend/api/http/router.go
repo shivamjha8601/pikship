@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/vishal1132/pikshipp/backend/api/http/handlers"
+	"github.com/vishal1132/pikshipp/backend/internal/allocation"
 	"github.com/vishal1132/pikshipp/backend/internal/auth"
 	"github.com/vishal1132/pikshipp/backend/internal/buyerexp"
 	"github.com/vishal1132/pikshipp/backend/internal/catalog"
@@ -38,8 +39,9 @@ type AppDeps struct {
 	Pickup       catalog.PickupService
 	Product      catalog.ProductService
 	BuyerAddress catalog.BuyerAddressService
-	Orders    orders.Service
-	Pricing   pricing.Engine
+	Orders     orders.Service
+	Pricing    pricing.Engine
+	Allocation allocation.Engine
 	Shipments shipments.Service
 	Wallet    wallet.Service
 	Tracking  tracking.Service
@@ -139,6 +141,13 @@ func NewAppRouter(deps AppDeps, requestTimeout time.Duration) chi.Router {
 					Shipments: deps.Shipments,
 					Wallet:    deps.Wallet,
 					Reports:   deps.Reports,
+				})
+				handlers.MountBooking(r, handlers.BookingDeps{
+					Orders:     deps.Orders,
+					Allocation: deps.Allocation,
+					Shipments:  deps.Shipments,
+					Pickup:     deps.Pickup,
+					Tracking:   deps.Tracking,
 				})
 				handlers.MountTracking(r, handlers.TrackingDeps{
 					Tracking: deps.Tracking,

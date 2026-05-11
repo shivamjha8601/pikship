@@ -32,6 +32,9 @@ type Config struct {
 	APIKey     secrets.Secret
 	ClientName string
 	Staging    bool
+	// BaseURL overrides the default prod/staging URL. Used in local dev to
+	// point at mock-delhivery; leave empty to use the real endpoints.
+	BaseURL string
 }
 
 // Adapter is the Delhivery carrier adapter.
@@ -46,6 +49,9 @@ func New(cfg Config) *Adapter {
 	base := prodBaseURL
 	if cfg.Staging {
 		base = stagingBaseURL
+	}
+	if cfg.BaseURL != "" {
+		base = cfg.BaseURL
 	}
 	return &Adapter{
 		cfg:        cfg,

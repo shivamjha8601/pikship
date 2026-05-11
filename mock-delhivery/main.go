@@ -174,7 +174,7 @@ func (s *server) createShipment(w http.ResponseWriter, r *http.Request) {
 			Phone       string  `json:"phone"`
 			OrderID     string  `json:"order"`
 			PaymentMode string  `json:"payment_mode"`
-			Weight      string  `json:"weight"`
+			Weight      float64 `json:"weight"`
 			TotalAmount float64 `json:"total_amount"`
 			CODAmount   float64 `json:"cod_amount"`
 		} `json:"shipments"`
@@ -193,8 +193,8 @@ func (s *server) createShipment(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	for _, in := range req.Shipments {
 		awb := s.newWaybill()
-		weightG := 0
-		fmt.Sscanf(in.Weight, "%d", &weightG)
+		// Weight is sent in kilograms as a float; convert to grams for storage.
+		weightG := int(in.Weight * 1000)
 		s.shipments[awb] = &shipment{
 			Waybill:        awb,
 			OrderRef:       in.OrderID,
@@ -222,10 +222,11 @@ func (s *server) createShipment(w http.ResponseWriter, r *http.Request) {
 	s.mu.Unlock()
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"success":    true,
+		"success":       true,
 		"package_count": len(packages),
-		"packages":   packages,
-		"upload_wbn": fmt.Sprintf("UPLOAD-%d", now.UnixMilli()),
+		"packages":      packages,
+		// Real Delhivery returns an array here; the adapter decodes it as one.
+		"upload_wbn": []string{fmt.Sprintf("UPLOAD-%d", now.UnixMilli())},
 	})
 }
 
@@ -293,24 +294,24 @@ func (s *server) trackShipment(w http.ResponseWriter, r *http.Request) {
 	status := autoStatus(ship)
 	scans := buildScans(ship, status)
 
+	// The internal Delhivery adapter expects Shipment.Status to be a string
+	// (current status text), not the nested object the real-world API returns.
+	// Emit a string so json.Unmarshal succeeds and the scans get parsed.
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ShipmentData": []any{
 			map[string]any{
 				"Shipment": map[string]any{
-					"AWB":            ship.Waybill,
-					"ReferenceNo":    ship.OrderRef,
-					"Status": map[string]any{
-						"Status":     status,
-						"StatusDateTime": ship.LastUpdated.Format(time.RFC3339),
-						"Instructions":   "",
-						"StatusCode":     statusCode(status),
-					},
-					"Origin":     "Bangalore_HUB",
-					"Destination": cityForPin(ship.ShipToPincode),
-					"DestRecieveBy": "",
-					"Scans":      scans,
-					"CODAmount":  ship.CODAmount,
-					"OrderType":  ship.PaymentMode,
+					"AWB":             ship.Waybill,
+					"ReferenceNo":     ship.OrderRef,
+					"Status":          status,
+					"StatusDateTime":  ship.LastUpdated.Format("2006-01-02T15:04:05"),
+					"StatusCode":      statusCode(status),
+					"Origin":          "Bangalore_HUB",
+					"Destination":     cityForPin(ship.ShipToPincode),
+					"DestRecieveBy":   "",
+					"Scans":           scans,
+					"CODAmount":       ship.CODAmount,
+					"OrderType":       ship.PaymentMode,
 				},
 			},
 		},
@@ -366,6 +367,9 @@ func statusCode(s string) string {
 	return ""
 }
 
+// The internal Delhivery adapter parses scans as a flat list with
+// "2006-01-02T15:04:05" timestamps — no nested ScanDetail, no timezone.
+// We emit that shape so the adapter actually deserialises into events.
 func buildScans(sh *shipment, current string) []any {
 	stages := []struct {
 		label string
@@ -376,18 +380,17 @@ func buildScans(sh *shipment, current string) []any {
 		{"Out for Delivery", 60 * time.Second},
 		{"Delivered", 90 * time.Second},
 	}
+	const tsLayout = "2006-01-02T15:04:05"
 	scans := make([]any, 0, len(stages))
 	for _, st := range stages {
 		if st.label == "Manifested" || time.Since(sh.CreatedAt) >= st.at {
 			scans = append(scans, map[string]any{
-				"ScanDetail": map[string]any{
-					"ScanDateTime":   sh.CreatedAt.Add(st.at).Format(time.RFC3339),
-					"Scan":           st.label,
-					"ScanType":       "PP",
-					"Instructions":   "",
-					"ScannedLocation": "Bangalore_HUB",
-					"StatusCode":     statusCode(st.label),
-				},
+				"ScanDateTime":    sh.CreatedAt.Add(st.at).Format(tsLayout),
+				"Scan":            st.label,
+				"ScanType":        statusCode(st.label),
+				"Instructions":    "",
+				"ScannedLocation": "Bangalore_HUB",
+				"StatusCode":      statusCode(st.label),
 			})
 		}
 		if st.label == current {
