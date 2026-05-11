@@ -19,6 +19,11 @@ import {
   EMPTY_ADDRESS,
   type AddressFormValue,
 } from "@/components/account/AddressForm";
+import {
+  WarehouseForm,
+  EMPTY_WAREHOUSE,
+  type WarehouseFormValue,
+} from "@/components/account/WarehouseForm";
 import { cn } from "@/lib/cn";
 import {
   User as UserIcon,
@@ -384,16 +389,38 @@ function AddressesTab() {
 function WarehousesTab() {
   const [items, setItems] = React.useState<PickupLocation[] | null>(null);
   const [err, setErr] = React.useState<string | null>(null);
+  const [adding, setAdding] = React.useState(false);
+  const [form, setForm] = React.useState<WarehouseFormValue>(EMPTY_WAREHOUSE);
+  const [submitting, setSubmitting] = React.useState(false);
+
+  const refresh = React.useCallback(async () => {
+    try {
+      const list = await catalogApi.listPickups();
+      setItems(list ?? []);
+    } catch (e) {
+      setErr((e as { message?: string }).message || "Failed to load");
+      setItems([]);
+    }
+  }, []);
 
   React.useEffect(() => {
-    catalogApi
-      .listPickups()
-      .then((l) => setItems(l ?? []))
-      .catch((e: { message?: string }) => {
-        setErr(e.message || "Failed to load");
-        setItems([]);
-      });
-  }, []);
+    refresh();
+  }, [refresh]);
+
+  async function save() {
+    setSubmitting(true);
+    setErr(null);
+    try {
+      await catalogApi.createPickup(form);
+      setAdding(false);
+      setForm(EMPTY_WAREHOUSE);
+      await refresh();
+    } catch (e) {
+      setErr((e as { message?: string }).message || "Failed to save warehouse");
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   return (
     <Card>
@@ -404,19 +431,39 @@ function WarehousesTab() {
             Where couriers collect your shipments. Pick one when creating an order.
           </CardDescription>
         </div>
-        <Link
-          href="/warehouses/new?next=/account?tab=warehouses"
-          className="inline-flex h-8 items-center justify-center gap-2 rounded-md bg-accent px-3 text-sm font-medium text-accent-fg hover:bg-accent/90"
-        >
-          <Plus className="h-4 w-4" /> Add warehouse
-        </Link>
+        {!adding && (
+          <Button
+            size="sm"
+            onClick={() => {
+              setForm(EMPTY_WAREHOUSE);
+              setAdding(true);
+            }}
+          >
+            <Plus className="h-4 w-4" /> Add warehouse
+          </Button>
+        )}
       </CardHeader>
       <CardBody>
         {err && <p className="mb-3 text-sm text-danger">{err}</p>}
+        {adding && (
+          <div className="mb-4 rounded-md border border-border p-4">
+            <h3 className="mb-3 text-sm font-medium">New warehouse</h3>
+            <WarehouseForm
+              value={form}
+              onChange={setForm}
+              onSubmit={save}
+              onCancel={() => setAdding(false)}
+              submitLabel="Add warehouse"
+              submitting={submitting}
+            />
+          </div>
+        )}
         {items === null ? (
           <p className="text-sm text-muted">Loading…</p>
         ) : items.length === 0 ? (
-          <p className="text-sm text-muted">No pickup warehouses yet.</p>
+          <p className="text-sm text-muted">
+            No pickup warehouses yet. Click <strong>Add warehouse</strong> to create one.
+          </p>
         ) : (
           <ul className="divide-y divide-border">
             {items.map((w) => (

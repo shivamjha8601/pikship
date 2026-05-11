@@ -15,7 +15,12 @@ import {
   type BuyerAddressInput,
   type PickupLocation,
 } from "@/lib/api";
-import { MapPin, Package as PackageIcon, Plus, Trash2, Star } from "lucide-react";
+import { Package as PackageIcon, Plus, Trash2, Star, Warehouse } from "lucide-react";
+import {
+  WarehouseForm,
+  EMPTY_WAREHOUSE,
+  type WarehouseFormValue,
+} from "@/components/account/WarehouseForm";
 
 type Line = { sku: string; name: string; quantity: number; price: number; weight: number };
 
@@ -40,6 +45,12 @@ function Inner() {
   const [error, setError] = React.useState<string | null>(null);
 
   const [pickupID, setPickupID] = React.useState("");
+  // When the user picks "+ New warehouse" we expand an inline form. On save we
+  // POST it, get the new pickup back, set pickupID to its ID, and collapse.
+  const [showNewWarehouse, setShowNewWarehouse] = React.useState(false);
+  const [newWarehouse, setNewWarehouse] = React.useState<WarehouseFormValue>(EMPTY_WAREHOUSE);
+  const [savingWarehouse, setSavingWarehouse] = React.useState(false);
+  const [warehouseErr, setWarehouseErr] = React.useState<string | null>(null);
   const [channel, setChannel] = React.useState("manual");
   const [channelOrderID, setChannelOrderID] = React.useState("");
   // "" means "new buyer" (fill the form below); otherwise the saved-address ID.
@@ -100,6 +111,22 @@ function Inner() {
     setShipCity(a.address.city);
     setShipState(a.state);
     setShipPincode(a.pincode);
+  }
+
+  async function saveNewWarehouse() {
+    setSavingWarehouse(true);
+    setWarehouseErr(null);
+    try {
+      const created = await catalogApi.createPickup(newWarehouse);
+      setPickups((cur) => [...cur, created]);
+      setPickupID(created.id);
+      setShowNewWarehouse(false);
+      setNewWarehouse(EMPTY_WAREHOUSE);
+    } catch (e) {
+      setWarehouseErr((e as { message?: string }).message || "Failed to save warehouse");
+    } finally {
+      setSavingWarehouse(false);
+    }
   }
 
   function clearAddressForm() {
@@ -232,28 +259,10 @@ function Inner() {
     return <div className="text-sm text-muted">Loading…</div>;
   }
 
-  if (pickups.length === 0) {
-    return (
-      <Card>
-        <CardBody className="mx-auto max-w-md py-12 text-center">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-accent/10">
-            <MapPin className="h-6 w-6 text-accent" />
-          </div>
-          <h2 className="text-lg font-semibold">Where do we pick this up?</h2>
-          <p className="mt-2 text-sm text-muted">
-            Before we can book this order, we need an address where the courier will collect
-            your shipment. This is usually your home, shop, or wherever your stock lives.
-          </p>
-          <Button
-            className="mt-6"
-            onClick={() => router.push("/warehouses/new?next=/orders/new")}
-          >
-            Add pickup address <Plus className="h-4 w-4" />
-          </Button>
-        </CardBody>
-      </Card>
-    );
-  }
+  // When the seller has no warehouses yet, surface the "+ New warehouse" form
+  // expanded by default so they can add one inline without being bounced to
+  // /warehouses/new. The rest of the form stays usable below.
+  const noWarehousesYet = pickups.length === 0;
 
   return (
     <form onSubmit={submit} className="mx-auto max-w-3xl space-y-6">
@@ -261,6 +270,106 @@ function Inner() {
         <h1 className="text-2xl font-semibold">Create order</h1>
         <p className="mt-1 text-sm text-muted">Add buyer details, items, and we'll allocate the best courier.</p>
       </header>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Warehouse className="h-4 w-4 text-muted" />
+            Pickup warehouse
+          </CardTitle>
+          <CardDescription>
+            Where the courier will collect this shipment. Pick a saved warehouse
+            or add a new one — both get saved to your address book.
+          </CardDescription>
+        </CardHeader>
+        <CardBody className="space-y-4">
+          <div className="grid gap-2 sm:grid-cols-2">
+            {pickups.map((p) => {
+              const active = pickupID === p.id;
+              return (
+                <button
+                  type="button"
+                  key={p.id}
+                  onClick={() => {
+                    setPickupID(p.id);
+                    setShowNewWarehouse(false);
+                  }}
+                  className={
+                    "rounded-md border p-3 text-left text-sm transition-colors " +
+                    (active
+                      ? "border-accent bg-accent/5"
+                      : "border-border bg-surface hover:bg-bg")
+                  }
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">{p.label}</span>
+                    {p.is_default && (
+                      <span className="inline-flex items-center gap-0.5 rounded bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-accent">
+                        <Star className="h-2.5 w-2.5" /> Default
+                      </span>
+                    )}
+                    {!p.active && (
+                      <span className="rounded bg-warning/10 px-1.5 py-0.5 text-[10px] font-medium text-warning">
+                        Inactive
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-xs text-muted">
+                    {p.contact_name} · {p.contact_phone}
+                  </div>
+                  <div className="truncate text-xs text-muted">
+                    {p.address.line1}, {p.address.city} {p.pincode}
+                  </div>
+                </button>
+              );
+            })}
+            <button
+              type="button"
+              onClick={() => {
+                setPickupID("");
+                setShowNewWarehouse(true);
+              }}
+              className={
+                "flex items-center justify-center gap-1 rounded-md border border-dashed p-3 text-sm " +
+                (showNewWarehouse || noWarehousesYet
+                  ? "border-accent bg-accent/5 text-accent"
+                  : "border-border text-muted hover:bg-bg")
+              }
+            >
+              <Plus className="h-4 w-4" /> New warehouse
+            </button>
+          </div>
+
+          {(showNewWarehouse || noWarehousesYet) && (
+            <div className="rounded-md border border-dashed border-border bg-bg/30 p-4">
+              {noWarehousesYet && (
+                <p className="mb-3 text-sm text-muted">
+                  No warehouses yet — add your first one to send this order. It'll
+                  be saved for future orders.
+                </p>
+              )}
+              {warehouseErr && (
+                <p className="mb-3 text-sm text-danger">{warehouseErr}</p>
+              )}
+              <WarehouseForm
+                value={newWarehouse}
+                onChange={setNewWarehouse}
+                onSubmit={saveNewWarehouse}
+                onCancel={
+                  noWarehousesYet
+                    ? undefined
+                    : () => {
+                        setShowNewWarehouse(false);
+                        setNewWarehouse(EMPTY_WAREHOUSE);
+                      }
+                }
+                submitLabel="Save & use this warehouse"
+                submitting={savingWarehouse}
+              />
+            </div>
+          )}
+        </CardBody>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -451,19 +560,6 @@ function Inner() {
             >
               <option value="prepaid">Prepaid</option>
               <option value="cod">Cash on Delivery</option>
-            </select>
-          </Field>
-          <Field label="Pickup from">
-            <select
-              value={pickupID}
-              onChange={(e) => setPickupID(e.target.value)}
-              className="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm"
-            >
-              {pickups.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.label} · {p.pincode}
-                </option>
-              ))}
             </select>
           </Field>
         </CardBody>
