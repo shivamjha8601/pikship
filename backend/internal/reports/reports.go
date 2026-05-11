@@ -32,6 +32,24 @@ type ShipmentSummary struct {
 type Service interface {
 	ShipmentSummary(ctx context.Context, sellerID core.SellerID, from, to time.Time) (ShipmentSummary, error)
 	ExportShipmentsCSV(ctx context.Context, sellerID core.SellerID, from, to time.Time, w io.Writer) error
+	DashboardSummary(ctx context.Context, sellerID core.SellerID) (DashboardSummary, error)
+}
+
+// DashboardSummary is the at-a-glance home-page aggregate.
+type DashboardSummary struct {
+	OrdersByState     map[string]int64 `json:"orders_by_state"`
+	OrdersToday       int64            `json:"orders_today"`
+	OrdersThisWeek    int64            `json:"orders_this_week"`
+	ShippingSpendPaise core.Paise      `json:"shipping_spend_paise"`
+	CODOutstandingPaise core.Paise     `json:"cod_outstanding_paise"`
+	UnpaidPrepaidCount int64           `json:"unpaid_prepaid_count"`
+	OrdersByDay       []DayBucket      `json:"orders_by_day"`
+}
+
+// DayBucket is one day's order count for the last-7-days sparkline.
+type DayBucket struct {
+	Day   string `json:"day"`   // YYYY-MM-DD
+	Count int64  `json:"count"`
 }
 
 type service struct{ pool *pgxpool.Pool }
@@ -62,6 +80,82 @@ func (s *service) ShipmentSummary(ctx context.Context, sellerID core.SellerID, f
 		return ShipmentSummary{}, fmt.Errorf("reports.ShipmentSummary: %w", err)
 	}
 	return sum, nil
+}
+
+// DashboardSummary aggregates everything the /reports landing page shows in
+// one round-trip. Designed for the at-a-glance card row + 7-day sparkline.
+func (s *service) DashboardSummary(ctx context.Context, sellerID core.SellerID) (DashboardSummary, error) {
+	out := DashboardSummary{OrdersByState: map[string]int64{}}
+
+	// Orders by state.
+	rows, err := s.pool.Query(ctx, `
+        SELECT state, COUNT(*) FROM order_record
+        WHERE seller_id = $1
+        GROUP BY state`, sellerID.UUID())
+	if err != nil {
+		return out, fmt.Errorf("reports.DashboardSummary by_state: %w", err)
+	}
+	for rows.Next() {
+		var state string
+		var n int64
+		if err := rows.Scan(&state, &n); err != nil {
+			rows.Close()
+			return out, err
+		}
+		out.OrdersByState[state] = n
+	}
+	rows.Close()
+
+	// Today + this week counts + unpaid prepaid count.
+	if err := s.pool.QueryRow(ctx, `
+        SELECT
+            COUNT(*) FILTER (WHERE created_at >= date_trunc('day', now() AT TIME ZONE 'Asia/Kolkata') AT TIME ZONE 'Asia/Kolkata'),
+            COUNT(*) FILTER (WHERE created_at >= date_trunc('week', now() AT TIME ZONE 'Asia/Kolkata') AT TIME ZONE 'Asia/Kolkata'),
+            COUNT(*) FILTER (WHERE payment_method='prepaid' AND payment_status='unpaid' AND state NOT IN ('cancelled','closed'))
+        FROM order_record WHERE seller_id = $1`,
+		sellerID.UUID(),
+	).Scan(&out.OrdersToday, &out.OrdersThisWeek, &out.UnpaidPrepaidCount); err != nil {
+		return out, fmt.Errorf("reports.DashboardSummary counts: %w", err)
+	}
+
+	// Shipping spend + COD outstanding (from shipments).
+	if err := s.pool.QueryRow(ctx, `
+        SELECT
+            COALESCE(SUM(charges_paise), 0),
+            COALESCE(SUM(cod_amount_paise) FILTER (WHERE state IN ('booked','in_transit')), 0)
+        FROM shipment WHERE seller_id = $1`,
+		sellerID.UUID(),
+	).Scan((*int64)(&out.ShippingSpendPaise), (*int64)(&out.CODOutstandingPaise)); err != nil {
+		return out, fmt.Errorf("reports.DashboardSummary money: %w", err)
+	}
+
+	// 7-day order counts (oldest → newest). LEFT JOIN with generate_series so
+	// days with zero orders still appear with a count of 0.
+	dayRows, err := s.pool.Query(ctx, `
+        SELECT to_char(d::date, 'YYYY-MM-DD'),
+               COALESCE(COUNT(o.id), 0)
+        FROM generate_series(
+            (now() AT TIME ZONE 'Asia/Kolkata')::date - INTERVAL '6 days',
+            (now() AT TIME ZONE 'Asia/Kolkata')::date,
+            '1 day'
+        ) d
+        LEFT JOIN order_record o
+          ON o.seller_id = $1
+         AND (o.created_at AT TIME ZONE 'Asia/Kolkata')::date = d::date
+        GROUP BY d
+        ORDER BY d`, sellerID.UUID())
+	if err != nil {
+		return out, fmt.Errorf("reports.DashboardSummary by_day: %w", err)
+	}
+	defer dayRows.Close()
+	for dayRows.Next() {
+		var b DayBucket
+		if err := dayRows.Scan(&b.Day, &b.Count); err != nil {
+			return out, err
+		}
+		out.OrdersByDay = append(out.OrdersByDay, b)
+	}
+	return out, nil
 }
 
 func (s *service) ExportShipmentsCSV(ctx context.Context, sellerID core.SellerID, from, to time.Time, w io.Writer) error {

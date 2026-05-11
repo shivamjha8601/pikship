@@ -9,6 +9,7 @@ import {
   Wallet as WalletIcon,
   Building2,
   Calculator,
+  BarChart3,
   LogOut,
   Menu as MenuIcon,
   X,
@@ -21,6 +22,7 @@ const NAV = [
   { label: "Orders", href: "/orders", icon: Package },
   { label: "Tracking", href: "/tracking", icon: Truck },
   { label: "Pricing", href: "/pricing", icon: Calculator },
+  { label: "Reports", href: "/reports", icon: BarChart3 },
   { label: "Wallet", href: "/wallet", icon: WalletIcon },
   { label: "Enterprise", href: "/enterprise", icon: Building2 },
 ];

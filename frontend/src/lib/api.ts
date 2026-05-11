@@ -399,6 +399,20 @@ export const pricingApi = {
     api.post<{ quotes: PricingQuote[] }>("/v1/pricing/quote", input),
 };
 
+export type DashboardSummary = {
+  orders_by_state: Record<string, number>;
+  orders_today: number;
+  orders_this_week: number;
+  shipping_spend_paise: number;
+  cod_outstanding_paise: number;
+  unpaid_prepaid_count: number;
+  orders_by_day: { day: string; count: number }[];
+};
+
+export const reportsApi = {
+  dashboard: () => api.get<DashboardSummary>("/v1/reports/dashboard"),
+};
+
 export const walletApi = {
   balance: () => api.get<WalletBalance>("/v1/wallet/balance"),
 };

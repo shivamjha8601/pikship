@@ -88,9 +88,25 @@ func GetShipmentSummaryHandler(d ShipmentDeps) http.HandlerFunc {
 	}
 }
 
+// GetDashboardHandler returns the seller-scoped reports dashboard aggregate
+// — orders by state, today/week counts, shipping spend, COD outstanding,
+// and a 7-day order-volume sparkline.
+func GetDashboardHandler(d ShipmentDeps) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		p := auth.MustPrincipalFrom(r.Context())
+		sum, err := d.Reports.DashboardSummary(r.Context(), p.SellerID)
+		if err != nil {
+			writeError(w, r, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, sum)
+	}
+}
+
 func MountShipments(r chi.Router, d ShipmentDeps) {
 	r.Get("/shipments/{shipmentID}", GetShipmentHandler(d))
 	r.Post("/shipments/{shipmentID}/cancel", CancelShipmentHandler(d))
 	r.Get("/wallet/balance", GetWalletBalanceHandler(d))
 	r.Get("/reports/shipments/summary", GetShipmentSummaryHandler(d))
+	r.Get("/reports/dashboard", GetDashboardHandler(d))
 }
