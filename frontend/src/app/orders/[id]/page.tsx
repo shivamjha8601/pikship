@@ -7,7 +7,7 @@ import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { ordersApi, paiseToRupees, shipmentsApi, type Order, type Shipment, type TrackingEvent } from "@/lib/api";
 import { OrderStateBadge } from "@/components/OrderStateBadge";
-import { ArrowLeft, Check, IndianRupee, RefreshCw, Send, Truck } from "lucide-react";
+import { ArrowLeft, Check, Download, IndianRupee, RefreshCw, Send, Truck } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { LinkButton } from "@/components/ui/Button";
 
@@ -30,6 +30,7 @@ function Inner() {
   const [trackErr, setTrackErr] = React.useState<string | null>(null);
   const [markingPaid, setMarkingPaid] = React.useState(false);
   const [payErr, setPayErr] = React.useState<string | null>(null);
+  const [labelLoading, setLabelLoading] = React.useState(false);
 
   const loadOrder = React.useCallback(() => {
     ordersApi.get(id).then(setOrder).catch((e) =>
@@ -80,6 +81,31 @@ function Inner() {
       setBookErr((e as { message?: string }).message || "Failed to book");
     } finally {
       setBooking(false);
+    }
+  }
+
+  async function downloadLabel() {
+    if (!shipment?.id) return;
+    setLabelLoading(true);
+    try {
+      // Bearer-auth fetch → blob → trigger save dialog. The plain
+      // <a href> path wouldn't carry our localStorage token.
+      const tok = window.localStorage.getItem("pikshipp_token");
+      const res = await fetch(`/api/v1/shipments/${shipment.id}/label`, {
+        headers: tok ? { Authorization: `Bearer ${tok}` } : undefined,
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `label-${shipment.awb || shipment.id}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setTrackErr((e as { message?: string }).message || "Failed to download label");
+    } finally {
+      setLabelLoading(false);
     }
   }
 
@@ -302,9 +328,16 @@ function Inner() {
                 AWB <span className="font-mono">{shipment?.awb || order.awb_number}</span> · refresh to pull latest from the carrier
               </p>
             </div>
-            <Button size="sm" variant="secondary" onClick={refreshTracking} loading={refreshing}>
-              <RefreshCw className="h-4 w-4" /> Refresh
-            </Button>
+            <div className="flex items-center gap-2">
+              {shipment?.id && (
+                <Button size="sm" variant="secondary" onClick={downloadLabel} loading={labelLoading}>
+                  <Download className="h-4 w-4" /> Label
+                </Button>
+              )}
+              <Button size="sm" variant="secondary" onClick={refreshTracking} loading={refreshing}>
+                <RefreshCw className="h-4 w-4" /> Refresh
+              </Button>
+            </div>
           </CardHeader>
           <CardBody>
             {trackErr && <p className="mb-3 text-sm text-danger">{trackErr}</p>}

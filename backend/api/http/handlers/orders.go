@@ -3,6 +3,7 @@ package handlers
 import (
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -23,8 +24,17 @@ type OrdersDeps struct {
 func ListOrdersHandler(d OrdersDeps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		p := auth.MustPrincipalFrom(r.Context())
+		var states []orders.OrderState
+		if s := r.URL.Query().Get("state"); s != "" {
+			for _, raw := range strings.Split(s, ",") {
+				raw = strings.TrimSpace(raw)
+				if raw != "" {
+					states = append(states, orders.OrderState(raw))
+				}
+			}
+		}
 		result, err := d.Orders.List(r.Context(), orders.ListQuery{
-			SellerID: p.SellerID, Limit: 50,
+			SellerID: p.SellerID, Limit: 50, States: states,
 		})
 		if err != nil {
 			writeError(w, r, err)

@@ -151,6 +151,41 @@ func MountBooking(r chi.Router, d BookingDeps) {
 	r.Post("/orders/{orderID}/book", BookOrderHandler(d))
 	r.Post("/shipments/{shipmentID}/refresh", RefreshTrackingHandler(d))
 	r.Get("/shipments/{shipmentID}/tracking-events", ListShipmentEventsHandler(d))
+	r.Get("/shipments/{shipmentID}/label", LabelHandler(d))
+}
+
+// LabelHandler streams the carrier-issued shipping label as a PDF. The
+// adapter has FetchLabel; this handler scopes by seller, looks up the
+// shipment to get the AWB + carrier, and pipes the bytes through.
+func LabelHandler(d BookingDeps) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		p := auth.MustPrincipalFrom(r.Context())
+		shipID, err := core.ParseShipmentID(chi.URLParam(r, "shipmentID"))
+		if err != nil {
+			writeError(w, r, core.ErrInvalidArgument)
+			return
+		}
+		sh, err := d.Shipments.Get(r.Context(), p.SellerID, shipID)
+		if err != nil {
+			writeError(w, r, err)
+			return
+		}
+		if sh.AWB == "" {
+			writeError(w, r, fmt.Errorf("shipment has no AWB yet: %w", core.ErrInvalidArgument))
+			return
+		}
+		// Use the shipments.Service registry? Simpler: thread the registry
+		// onto BookingDeps and reach in. For now we ask the shipments
+		// service to expose a label fetcher.
+		labelBytes, err := d.Shipments.FetchLabelPDF(r.Context(), p.SellerID, shipID)
+		if err != nil {
+			writeError(w, r, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/pdf")
+		w.Header().Set("Content-Disposition", fmt.Sprintf(`inline; filename="label-%s.pdf"`, sh.AWB))
+		_, _ = w.Write(labelBytes)
+	}
 }
 
 // ListShipmentEventsHandler returns all tracking events for a shipment.

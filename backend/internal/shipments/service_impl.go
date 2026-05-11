@@ -263,6 +263,28 @@ func (s *service) GetByOrderID(ctx context.Context, sellerID core.SellerID, orde
 	return out, err
 }
 
+// FetchLabelPDF asks the carrier adapter for a shipping label and returns
+// the raw PDF bytes. Errors if the shipment hasn't booked, or if no adapter
+// is registered for the carrier_code.
+func (s *service) FetchLabelPDF(ctx context.Context, sellerID core.SellerID, shipmentID core.ShipmentID) ([]byte, error) {
+	sh, err := s.Get(ctx, sellerID, shipmentID)
+	if err != nil {
+		return nil, err
+	}
+	if sh.AWB == "" {
+		return nil, fmt.Errorf("shipments.FetchLabelPDF: shipment has no AWB: %w", core.ErrInvalidArgument)
+	}
+	adapter, ok := s.registry.Get(sh.CarrierCode)
+	if !ok {
+		return nil, fmt.Errorf("shipments.FetchLabelPDF: no adapter for carrier %q", sh.CarrierCode)
+	}
+	res := adapter.FetchLabel(ctx, carriers.LabelRequest{AWBNumber: sh.AWB, Format: "pdf"})
+	if res.Err != nil {
+		return nil, fmt.Errorf("shipments.FetchLabelPDF: %w", res.Err)
+	}
+	return res.Value.Data, nil
+}
+
 // GetByAWB is unscoped (carriers webhook in by AWB) — must use admin/reports
 // pool by caller. We use the app pool here without seller scope only for v0;
 // production should route this via a dedicated reports-pool-backed service.

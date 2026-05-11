@@ -97,6 +97,12 @@ const (
         ORDER BY created_at DESC
         LIMIT $2 OFFSET $3
     `
+	listOrdersByStatesSQL = `
+        SELECT id FROM order_record
+        WHERE seller_id = $1 AND state = ANY($4::text[])
+        ORDER BY created_at DESC
+        LIMIT $2 OFFSET $3
+    `
 )
 
 func insertOrder(ctx context.Context, q querier, req CreateRequest) (Order, error) {
@@ -262,11 +268,21 @@ func cancelOrderRow(ctx context.Context, q querier, sellerID core.SellerID, id c
 	return err
 }
 
-func listOrderIDs(ctx context.Context, q querier, sellerID core.SellerID, limit, offset int) ([]core.OrderID, error) {
+func listOrderIDs(ctx context.Context, q querier, sellerID core.SellerID, limit, offset int, states []OrderState) ([]core.OrderID, error) {
 	if limit == 0 {
 		limit = 50
 	}
-	rows, err := q.Query(ctx, listOrdersSQL, sellerID.UUID(), limit, offset)
+	var rows pgx.Rows
+	var err error
+	if len(states) == 0 {
+		rows, err = q.Query(ctx, listOrdersSQL, sellerID.UUID(), limit, offset)
+	} else {
+		ss := make([]string, len(states))
+		for i, s := range states {
+			ss[i] = string(s)
+		}
+		rows, err = q.Query(ctx, listOrdersByStatesSQL, sellerID.UUID(), limit, offset, ss)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("orders.listOrderIDs: %w", err)
 	}

@@ -46,6 +46,9 @@ type Service interface {
 
 	// ListByPickupDate lists shipments for manifest generation.
 	ListByPickupDate(ctx context.Context, sellerID core.SellerID, pickupLocationID core.PickupLocationID, carrierCode string, date time.Time) ([]Shipment, error)
+
+	// FetchLabelPDF returns the carrier-issued shipping label as PDF bytes.
+	FetchLabelPDF(ctx context.Context, sellerID core.SellerID, shipmentID core.ShipmentID) ([]byte, error)
 }
 
 // ShipmentState represents the shipment's lifecycle state.

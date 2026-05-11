@@ -13,6 +13,23 @@ export default function OrdersPage() {
   return <Shell><Inner /></Shell>;
 }
 
+function PaymentDot({ status }: { status?: string }) {
+  if (!status) return <span className="text-xs text-muted">—</span>;
+  const map: Record<string, [string, string]> = {
+    paid: ["bg-success/10 text-success", "Paid"],
+    unpaid: ["bg-warning/10 text-warning", "Unpaid"],
+    pending_cod: ["bg-bg text-muted", "COD"],
+    cod_collected: ["bg-success/10 text-success", "COD ✓"],
+    refunded: ["bg-warning/10 text-warning", "Refunded"],
+  };
+  const [cls, label] = map[status] || ["bg-bg text-muted", status];
+  return (
+    <span className={"inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-medium " + cls}>
+      {label}
+    </span>
+  );
+}
+
 function Inner() {
   const [orders, setOrders] = React.useState<Order[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -99,6 +116,7 @@ function Inner() {
                   <th className="px-5 py-3 text-left font-medium">Buyer</th>
                   <th className="px-5 py-3 text-left font-medium">Destination</th>
                   <th className="px-5 py-3 text-left font-medium">Total</th>
+                  <th className="px-5 py-3 text-left font-medium">Payment</th>
                   <th className="px-5 py-3 text-left font-medium">Status</th>
                 </tr>
               </thead>
@@ -122,6 +140,9 @@ function Inner() {
                     <td className="px-5 py-3">
                       {paiseToRupees(o.total_paise)}
                       <div className="text-xs text-muted uppercase">{o.payment_method}</div>
+                    </td>
+                    <td className="px-5 py-3">
+                      <PaymentDot status={o.payment_status} />
                     </td>
                     <td className="px-5 py-3"><OrderStateBadge state={o.state} /></td>
                   </tr>

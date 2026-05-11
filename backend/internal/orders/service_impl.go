@@ -281,7 +281,7 @@ func (s *serviceImpl) Close(ctx context.Context, sellerID core.SellerID, id core
 func (s *serviceImpl) List(ctx context.Context, q ListQuery) (ListResult, error) {
 	var result ListResult
 	err := dbtx.WithReadOnlyTx(ctx, s.pool, q.SellerID, func(ctx context.Context, tx pgx.Tx) error {
-		ids, err := listOrderIDs(ctx, tx, q.SellerID, q.Limit, q.Offset)
+		ids, err := listOrderIDs(ctx, tx, q.SellerID, q.Limit, q.Offset, q.States)
 		if err != nil {
 			return fmt.Errorf("orders.List: %w", err)
 		}
