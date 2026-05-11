@@ -35,6 +35,7 @@ import (
 	"github.com/vishal1132/pikshipp/backend/internal/observability/sentryx"
 	"github.com/vishal1132/pikshipp/backend/internal/orders"
 	"github.com/vishal1132/pikshipp/backend/internal/policy"
+	"github.com/vishal1132/pikshipp/backend/internal/pricing"
 	"github.com/vishal1132/pikshipp/backend/internal/reports"
 	"github.com/vishal1132/pikshipp/backend/internal/secrets"
 	"github.com/vishal1132/pikshipp/backend/internal/seller"
@@ -174,6 +175,9 @@ func run(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 	// Orders.
 	orderSvc := orders.New(poolApp, nil, log)
 
+	// Pricing engine — admin pool, reads rate cards across scopes.
+	pricingEngine := pricing.New(poolAdmin)
+
 	// Carriers registry — sandbox registered in dev; real adapters in prod.
 	// (Delhivery + others added by wiring code that reads carrier credentials
 	// from secrets.Store; omitted here until credentials are configured.)
@@ -233,6 +237,7 @@ func run(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 			Product:      productSvc,
 			BuyerAddress: buyerAddrSvc,
 			Orders:    orderSvc,
+			Pricing:   pricingEngine,
 			Shipments: shipSvc,
 			Wallet:    walletSvc,
 			Tracking:  trackingSvc,

@@ -20,6 +20,7 @@ import (
 	"github.com/vishal1132/pikshipp/backend/internal/observability/metrics"
 	"github.com/vishal1132/pikshipp/backend/internal/observability/sentryx"
 	"github.com/vishal1132/pikshipp/backend/internal/orders"
+	"github.com/vishal1132/pikshipp/backend/internal/pricing"
 	"github.com/vishal1132/pikshipp/backend/internal/reports"
 	"github.com/vishal1132/pikshipp/backend/internal/seller"
 	"github.com/vishal1132/pikshipp/backend/internal/shipments"
@@ -38,6 +39,7 @@ type AppDeps struct {
 	Product      catalog.ProductService
 	BuyerAddress catalog.BuyerAddressService
 	Orders    orders.Service
+	Pricing   pricing.Engine
 	Shipments shipments.Service
 	Wallet    wallet.Service
 	Tracking  tracking.Service
@@ -132,6 +134,7 @@ func NewAppRouter(deps AppDeps, requestTimeout time.Duration) chi.Router {
 					Orders: deps.Orders,
 					Limits: deps.Limits,
 				})
+				handlers.MountPricing(r, handlers.PricingDeps{Engine: deps.Pricing})
 				handlers.MountShipments(r, handlers.ShipmentDeps{
 					Shipments: deps.Shipments,
 					Wallet:    deps.Wallet,

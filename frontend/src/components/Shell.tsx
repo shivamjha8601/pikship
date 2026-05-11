@@ -8,6 +8,7 @@ import {
   Truck,
   Wallet as WalletIcon,
   Building2,
+  Calculator,
   LogOut,
   Menu as MenuIcon,
   X,
@@ -19,6 +20,7 @@ const NAV = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Orders", href: "/orders", icon: Package },
   { label: "Tracking", href: "/tracking", icon: Truck },
+  { label: "Pricing", href: "/pricing", icon: Calculator },
   { label: "Wallet", href: "/wallet", icon: WalletIcon },
   { label: "Enterprise", href: "/enterprise", icon: Building2 },
 ];

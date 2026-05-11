@@ -12,7 +12,7 @@ import (
 // RequiredSchemaVersion is the migration version this binary expects.
 // Bumped manually with each release that adds migrations. Keep in sync
 // with the highest-numbered file under /migrations.
-const RequiredSchemaVersion = 21
+const RequiredSchemaVersion = 22
 
 // CheckSchemaVersion errors if the connected DB is older than required
 // or if a migration is in the dirty state. Called from main on startup;

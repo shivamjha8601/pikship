@@ -318,6 +318,35 @@ export const ordersApi = {
     api.post<{ status: string }>(`/v1/orders/${id}/cancel`, { reason }),
 };
 
+export type PricingPackage = {
+  weight_g: number;
+  length_mm: number;
+  width_mm: number;
+  height_mm: number;
+};
+
+export type PricingQuote = {
+  carrier_id: string;
+  carrier_code: string;
+  service_type: "standard" | "express" | "same_day" | "lite";
+  estimated_days: number;
+  total_paise: number;
+  zone?: string;
+  packages: number;
+  breakdown?: Record<string, number>;
+};
+
+export const pricingApi = {
+  quote: (input: {
+    pickup_pincode: string;
+    ship_to_pincode: string;
+    payment_mode?: "prepaid" | "cod";
+    declared_value_paise?: number;
+    packages: PricingPackage[];
+  }) =>
+    api.post<{ quotes: PricingQuote[] }>("/v1/pricing/quote", input),
+};
+
 export const walletApi = {
   balance: () => api.get<WalletBalance>("/v1/wallet/balance"),
 };
