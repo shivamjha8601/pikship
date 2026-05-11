@@ -7,7 +7,8 @@ import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { ordersApi, paiseToRupees, type Order } from "@/lib/api";
 import { OrderStateBadge } from "@/components/OrderStateBadge";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, IndianRupee } from "lucide-react";
+import { LinkButton } from "@/components/ui/Button";
 
 export default function OrderDetailPage() {
   return <Shell><Inner /></Shell>;
@@ -73,6 +74,12 @@ function Inner() {
           </p>
         </div>
         <div className="flex gap-2">
+          {order.payment_method === "prepaid" &&
+            ["draft", "ready", "allocating"].includes(order.state) && (
+              <LinkButton href={`/orders/${order.id}/pay`}>
+                <IndianRupee className="h-4 w-4" /> Pay {paiseToRupees(order.total_paise)}
+              </LinkButton>
+            )}
           {cancellable && (
             <Button variant="danger" loading={cancelling} onClick={cancel}>Cancel order</Button>
           )}
